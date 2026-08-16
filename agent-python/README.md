@@ -36,7 +36,7 @@ curl http://localhost:8000/health
 판매 동향 조회:
 
 ```bash
-curl -X POST "http://localhost:8000/tools/sales-trend" \
+curl -X POST "http://localhost:8000/docs#/default/sales_trend_tools_sales_trend_post" \
   -H "Content-Type: application/json" \
   -d '{
     "start_month": "2026-01",
@@ -44,6 +44,20 @@ curl -X POST "http://localhost:8000/tools/sales-trend" \
     "product_group": "Mobile OLED",
     "customer_id": null
   }'
+```
+
+판매 동향 조회:
+
+```bash
+curl -X POST "http://localhost:8000/docs#/default/order_status_tools_order_status_post"\
+  -H "Content-Type: application/json" \
+  -d '{
+    "start_date": "2026-01-01",
+    "end_date": "2026-06-30",
+    "customer_id": null,
+    "product_group": "Mobile OLED",
+    "status": null
+}'
 ```
 
 Swagger UI는 `http://localhost:8000/docs`에서 확인할 수 있습니다.

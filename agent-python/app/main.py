@@ -8,7 +8,13 @@ from fastapi.responses import JSONResponse
 
 from app.db import db
 from app.schemas.common import ErrorResponse, HealthResponse
-from app.schemas.tool_schema import SalesTrendRequest, SalesTrendResponse
+from app.schemas.tool_schema import (
+    OrderStatusRequest,
+    OrderStatusResponse,
+    SalesTrendRequest,
+    SalesTrendResponse,
+)
+from app.tools.order_tool import get_order_status
 from app.tools.sales_tool import get_sales_trend
 
 logger = logging.getLogger(__name__)
@@ -57,5 +63,20 @@ def health() -> HealthResponse:
     response_model=SalesTrendResponse,
     responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
 )
-def sales_trend(request: SalesTrendRequest) -> SalesTrendResponse:
-    return get_sales_trend(request)
+def sales_trend(request: SalesTrendRequest) -> SalesTrendResponse | JSONResponse:
+    result = get_sales_trend(request)
+    if isinstance(result, ErrorResponse):
+        return JSONResponse(status_code=500, content=result.model_dump(mode="json"))
+    return result
+
+
+@app.post(
+    "/tools/order-status",
+    response_model=OrderStatusResponse,
+    responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+def order_status(request: OrderStatusRequest) -> OrderStatusResponse | JSONResponse:
+    result = get_order_status(request)
+    if isinstance(result, ErrorResponse):
+        return JSONResponse(status_code=500, content=result.model_dump(mode="json"))
+    return result

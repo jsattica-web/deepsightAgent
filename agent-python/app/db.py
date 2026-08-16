@@ -1,7 +1,7 @@
 import os
 from contextlib import contextmanager
 from threading import Lock
-from typing import Generator
+from typing import ContextManager, Generator
 
 from psycopg2.extensions import connection
 from psycopg2.pool import ThreadedConnectionPool
@@ -56,3 +56,9 @@ class Database:
 
 
 db = Database()
+
+
+def get_connection() -> ContextManager[connection]:
+    """Return the application's read-only database connection context manager."""
+
+    return db.connection()

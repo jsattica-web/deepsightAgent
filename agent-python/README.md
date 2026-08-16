@@ -22,6 +22,9 @@ docker build -t deepsight-agent-python .
 docker run --rm -p 8000:8000 -e DATABASE_URL="$env:DATABASE_URL" deepsight-agent-python
 ```
 
+## 서버 띄우기 (supabase)
+python -m uvicorn app.main:app --reload --env-file .env.example
+
 ## curl 테스트
 
 상태 확인:

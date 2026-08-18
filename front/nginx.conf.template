@@ -1,0 +1,72 @@
+server {
+    # Cloud Run이 주입하는 PORT를 사용한다. 컨테이너 시작 시 envsubst가 치환한다.
+    listen       ${PORT};
+    server_name  _;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    # Cloud Run 프론트엔드가 이미 압축을 처리하지만, 직접 접근 대비로 남겨둔다.
+    gzip              on;
+    gzip_vary         on;
+    gzip_min_length   1024;
+    gzip_proxied      any;
+    gzip_types        text/plain text/css application/javascript application/json image/svg+xml;
+
+    # 컨테이너 기동 확인용
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok';
+    }
+
+    # ---- A안 핵심: /api 요청을 Spring Boot 서비스로 중계한다 ----
+    # 브라우저 입장에서는 오리진이 하나이므로 CORS가 발생하지 않는다.
+    location /api/ {
+        # 주의: BACKEND_URL 끝에 슬래시를 붙이면 안 된다.
+        #   http://host       -> /api/chat 이 /api/chat 으로 전달된다 (의도한 동작)
+        #   http://host/      -> /api/chat 이 /chat 으로 전달되어 prefix가 잘린다
+        proxy_pass ${BACKEND_URL};
+
+        # Cloud Run은 Host 헤더로 서비스를 라우팅하므로 대상 호스트로 맞춰야 한다.
+        proxy_set_header Host              $proxy_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # 백엔드를 공개하지 않기 위한 공유 시크릿. Spring 쪽에서 검증한다.
+        proxy_set_header X-Internal-Token  "${INTERNAL_TOKEN}";
+
+        # HTTPS 대상일 때 SNI를 보내야 Cloud Run이 라우팅할 수 있다.
+        proxy_ssl_server_name on;
+
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        # LLM 응답은 수 초~수십 초가 걸릴 수 있다.
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    300s;
+        proxy_read_timeout    300s;
+
+        # SSE/스트리밍 응답을 쓰게 될 경우를 대비해 버퍼링을 끈다.
+        proxy_buffering off;
+    }
+
+    # 해시가 붙은 빌드 산출물은 장기 캐시가 안전하다.
+    location /assets/ {
+        # expires 지시어와 add_header를 함께 쓰면 Cache-Control 헤더가
+        # 두 번 내려간다. add_header 하나에 max-age까지 담는다.
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # index.html은 항상 최신을 받아야 배포가 즉시 반영된다.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # SPA 라우팅 대응. 라우터 도입 시 새로고침 404를 방지한다.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

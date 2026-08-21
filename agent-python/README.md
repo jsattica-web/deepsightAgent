@@ -60,4 +60,14 @@ curl -X POST "http://localhost:8000/docs#/default/order_status_tools_order_statu
 }'
 ```
 
+재고 조회:
+```bash
+curl -X POST "http://localhost:8000/docs#/default/inventory_risk_tools_inventory_risk_post"\
+  -H "Content-Type: application/json" \
+  -d '{
+    "inventory_month": "2026-06",
+    "product_group": "TV OLED",
+}'
+```
+
 Swagger UI는 `http://localhost:8000/docs`에서 확인할 수 있습니다.

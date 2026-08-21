@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -98,4 +98,38 @@ class OrderStatusPoint(BaseModel):
 
 class OrderStatusResponse(ToolResponse):
     data: list[OrderStatusPoint]
+    chart_data: dict[str, Any]
+
+
+class InventoryRiskRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "inventory_month": "2026-06",
+                "product_group": "TV OLED",
+            }
+        }
+    )
+
+    inventory_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    product_group: str = Field(min_length=1, max_length=50)
+
+
+class InventoryTrendPoint(BaseModel):
+    month: str
+    ending_stock: int
+    safety_stock: int
+    production_qty: int
+    sales_qty: int
+
+
+class InventoryRiskSignal(BaseModel):
+    level: Literal["HIGH", "MEDIUM", "LOW"]
+    type: str
+    message: str
+
+
+class InventoryRiskResponse(ToolResponse):
+    data: list[InventoryTrendPoint]
+    risk_signals: list[InventoryRiskSignal]
     chart_data: dict[str, Any]

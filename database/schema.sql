@@ -160,6 +160,13 @@ comment on column market_news.summary is '뉴스 요약';
 comment on column market_news.impact_score is '시장 영향 점수. 0에서 100 사이 값';
 comment on column market_news.related_product_group is '관련 제품군';
 
+alter table dim_customer enable row level security;
+alter table dim_product enable row level security;
+alter table fact_sales enable row level security;
+alter table fact_orders enable row level security;
+alter table fact_inventory enable row level security;
+alter table market_news enable row level security;
+
 create index idx_dim_customer_region
     on dim_customer (region);
 

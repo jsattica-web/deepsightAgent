@@ -15,6 +15,28 @@ uvicorn app.main:app --reload
 
 `DATABASE_URL`에는 실제 접속 정보를 환경변수로 설정합니다. `.env`나 비밀번호는 저장소에 커밋하지 마세요.
 
+## Supabase 연결
+
+현재 Supabase 프로젝트:
+
+- Project: `deepSightAgent`
+- Project ref: `gcnzhbhhitiahvgchjty`
+- Region: `ap-northeast-1`
+- Direct DB host: `db.gcnzhbhhitiahvgchjty.supabase.co`
+
+Supabase Dashboard의 **Connect** 메뉴에서 데이터베이스 비밀번호가 포함된 Postgres connection string을 복사한 뒤 `DATABASE_URL`로 설정합니다.
+
+```powershell
+cd agent-python
+Copy-Item .env.example .env
+# .env의 [YOUR-PASSWORD]를 Supabase DB password로 교체하거나,
+# 아래처럼 현재 PowerShell 세션에 직접 설정하세요.
+$env:DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.gcnzhbhhitiahvgchjty.supabase.co:5432/postgres?sslmode=require"
+uvicorn app.main:app --reload
+```
+
+Supabase 공식 문서 기준으로, 장시간 실행되는 FastAPI 백엔드에서는 Direct connection을 우선 사용할 수 있습니다. 실행 환경이 IPv4-only라 direct host 접속이 실패하면 Dashboard의 Session pooler connection string을 `DATABASE_URL`에 넣어 사용하세요.
+
 ## Docker 실행
 
 ```powershell

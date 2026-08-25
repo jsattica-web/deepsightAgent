@@ -7,6 +7,8 @@ from app.schemas.common import ToolResponse
 
 
 class SalesTrendRequest(BaseModel):
+    """판매 동향 Tool 요청값이다."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -25,12 +27,15 @@ class SalesTrendRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_month_range(self) -> "SalesTrendRequest":
+        """판매 조회 시작 월이 종료 월보다 늦지 않은지 검증한다."""
         if self.start_month > self.end_month:
             raise ValueError("start_month는 end_month보다 늦을 수 없습니다.")
         return self
 
 
 class SalesTrendPoint(BaseModel):
+    """판매 동향 차트와 표에 표시할 월별 집계 데이터이다."""
+
     month: str
     qty: int
     revenue: float
@@ -38,11 +43,15 @@ class SalesTrendPoint(BaseModel):
 
 
 class SalesTrendResponse(ToolResponse):
+    """판매 동향 Tool의 성공 응답이다."""
+
     data: list[SalesTrendPoint]
     chart_data: dict[str, Any]
 
 
 class OrderStatusRequest(BaseModel):
+    """수주 현황 Tool 요청값이다."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -65,6 +74,7 @@ class OrderStatusRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_request(self) -> "OrderStatusRequest":
+        """수주 조회 기간과 주문 상태 코드가 허용 범위 안에 있는지 검증한다."""
         if self.start_date > self.end_date:
             raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
         if self.status:
@@ -85,6 +95,8 @@ class OrderStatusRequest(BaseModel):
 
 
 class OrderStatusPoint(BaseModel):
+    """수주 현황 차트와 표에 표시할 월별 집계 데이터이다."""
+
     month: str
     total_orders: int
     total_order_qty: int
@@ -97,11 +109,15 @@ class OrderStatusPoint(BaseModel):
 
 
 class OrderStatusResponse(ToolResponse):
+    """수주 현황 Tool의 성공 응답이다."""
+
     data: list[OrderStatusPoint]
     chart_data: dict[str, Any]
 
 
 class InventoryRiskRequest(BaseModel):
+    """재고 리스크 Tool 요청값이다."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -116,6 +132,8 @@ class InventoryRiskRequest(BaseModel):
 
 
 class InventoryTrendPoint(BaseModel):
+    """재고 리스크 차트와 표에 표시할 월별 재고 데이터이다."""
+
     month: str
     ending_stock: int
     safety_stock: int
@@ -124,18 +142,72 @@ class InventoryTrendPoint(BaseModel):
 
 
 class InventoryRiskSignal(BaseModel):
+    """재고 Tool이 감지한 개별 리스크 신호이다."""
+
     level: Literal["HIGH", "MEDIUM", "LOW"]
     type: str
     message: str
 
 
 class InventoryRiskResponse(ToolResponse):
+    """재고 리스크 Tool의 성공 응답이다."""
+
     data: list[InventoryTrendPoint]
     risk_signals: list[InventoryRiskSignal]
     chart_data: dict[str, Any]
 
 
+class CustomerProfileRequest(BaseModel):
+    """13번 Customer Profile Tool 요청값이다."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "customer_id": "CUST_A",
+                "start_month": "2026-01",
+                "end_month": "2026-06",
+            }
+        }
+    )
+
+    customer_id: str = Field(min_length=1, max_length=30)
+    start_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    end_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+    @model_validator(mode="after")
+    def validate_month_range(self) -> "CustomerProfileRequest":
+        """고객사 조회 시작 월이 종료 월보다 늦지 않은지 검증한다."""
+        if self.start_month > self.end_month:
+            raise ValueError("start_month는 end_month보다 늦을 수 없습니다.")
+        return self
+
+
+class CustomerProfilePoint(BaseModel):
+    """고객 프로필과 기간별 판매·수주 요약 데이터이다."""
+
+    customer_id: str
+    customer_name: str
+    segment: str
+    region: str
+    tier: str
+    main_application: str
+    sales_qty: int
+    sales_revenue: float
+    order_count: int
+    order_qty: int
+    delayed_order_count: int
+
+
+class CustomerProfileResponse(ToolResponse):
+    """13번 Customer Profile Tool의 성공 응답이다."""
+
+    data: list[CustomerProfilePoint]
+    chart_data: dict[str, Any]
+
+
 class CompetitorNewsRequest(BaseModel):
+    """14번 Competitor News Tool 요청값이다."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -160,6 +232,7 @@ class CompetitorNewsRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_request(self) -> "CompetitorNewsRequest":
+        """뉴스 조회 기간과 경쟁사 목록을 검증한다."""
         if self.start_date > self.end_date:
             raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
         if self.companies is not None:
@@ -169,6 +242,8 @@ class CompetitorNewsRequest(BaseModel):
 
 
 class CompetitorNewsPoint(BaseModel):
+    """경쟁사 뉴스 검색 결과의 개별 기사 데이터이다."""
+
     news_date: date
     company: str
     category: str
@@ -180,11 +255,15 @@ class CompetitorNewsPoint(BaseModel):
 
 
 class CompetitorNewsResponse(ToolResponse):
+    """14번 Competitor News Tool의 성공 응답이다."""
+
     data: list[CompetitorNewsPoint]
     chart_data: dict[str, Any]
 
 
 class BriefingRequest(BaseModel):
+    """15번 Briefing Report Tool 요청값이다."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -221,6 +300,7 @@ class BriefingRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_request(self) -> "BriefingRequest":
+        """브리핑 기간과 생성할 섹션 목록을 검증한다."""
         if self.start_date > self.end_date:
             raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
         if not self.sections:
@@ -229,52 +309,15 @@ class BriefingRequest(BaseModel):
 
 
 class BriefingSection(BaseModel):
+    """브리프북의 개별 섹션 데이터이다."""
+
     order: int
     section: str
     key_message: str
 
 
 class BriefingResponse(ToolResponse):
+    """15번 Briefing Report Tool의 성공 응답이다."""
+
     data: list[BriefingSection]
-    chart_data: dict[str, Any]
-
-
-class CustomerProfileRequest(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "customer_id": "CUST_A",
-                "start_month": "2026-01",
-                "end_month": "2026-06",
-            }
-        }
-    )
-
-    customer_id: str = Field(min_length=1, max_length=30)
-    start_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
-    end_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
-
-    @model_validator(mode="after")
-    def validate_month_range(self) -> "CustomerProfileRequest":
-        if self.start_month > self.end_month:
-            raise ValueError("start_month는 end_month보다 늦을 수 없습니다.")
-        return self
-
-
-class CustomerProfilePoint(BaseModel):
-    customer_id: str
-    customer_name: str
-    segment: str
-    region: str
-    tier: str
-    main_application: str
-    sales_qty: int
-    sales_revenue: float
-    order_count: int
-    order_qty: int
-    delayed_order_count: int
-
-
-class CustomerProfileResponse(ToolResponse):
-    data: list[CustomerProfilePoint]
     chart_data: dict[str, Any]

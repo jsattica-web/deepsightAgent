@@ -10,6 +10,12 @@ from app.db import db
 from app.graph.agent import run_agent
 from app.schemas.common import ErrorResponse, HealthResponse
 from app.schemas.tool_schema import (
+    BriefingRequest,
+    BriefingResponse,
+    CompetitorNewsRequest,
+    CompetitorNewsResponse,
+    CustomerProfileRequest,
+    CustomerProfileResponse,
     InventoryRiskRequest,
     InventoryRiskResponse,
     OrderStatusRequest,
@@ -17,7 +23,10 @@ from app.schemas.tool_schema import (
     SalesTrendRequest,
     SalesTrendResponse,
 )
+from app.tools.briefing_tool import create_briefing_report
+from app.tools.customer_tool import get_customer_profile
 from app.tools.inventory_tool import get_inventory_risk
+from app.tools.news_tool import search_competitor_news
 from app.tools.order_tool import get_order_status
 from app.tools.sales_tool import get_sales_trend
 from pydantic import BaseModel, Field
@@ -129,6 +138,49 @@ def inventory_risk(
     """재고 리스크 Tool을 단독 실행하고 Tool 오류를 HTTP 오류 응답으로 변환한다."""
     # 정상 결과는 Pydantic response_model을 통해 JSON으로 자동 변환된다.
     result = get_inventory_risk(request)
+    if isinstance(result, ErrorResponse):
+        return Utf8JSONResponse(status_code=500, content=result.model_dump(mode="json"))
+    return result
+
+
+@app.post(
+    "/tools/customer-brief",
+    response_model=CustomerProfileResponse,
+    responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+def customer_brief(
+    request: CustomerProfileRequest,
+) -> CustomerProfileResponse | JSONResponse:
+    """13번 Customer Profile Tool을 단독 실행하고 Tool 오류를 HTTP 오류 응답으로 변환한다."""
+    result = get_customer_profile(request)
+    if isinstance(result, ErrorResponse):
+        return Utf8JSONResponse(status_code=500, content=result.model_dump(mode="json"))
+    return result
+
+
+@app.post(
+    "/tools/competitor-news",
+    response_model=CompetitorNewsResponse,
+    responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+def competitor_news(
+    request: CompetitorNewsRequest,
+) -> CompetitorNewsResponse | JSONResponse:
+    """14번 Competitor News Tool을 단독 실행하고 Tool 오류를 HTTP 오류 응답으로 변환한다."""
+    result = search_competitor_news(request)
+    if isinstance(result, ErrorResponse):
+        return Utf8JSONResponse(status_code=500, content=result.model_dump(mode="json"))
+    return result
+
+
+@app.post(
+    "/agent/briefing",
+    response_model=BriefingResponse,
+    responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+def briefing(request: BriefingRequest) -> BriefingResponse | JSONResponse:
+    """15번 Briefing Report Tool을 실행하고 Tool 오류를 HTTP 오류 응답으로 변환한다."""
+    result = create_briefing_report(request)
     if isinstance(result, ErrorResponse):
         return Utf8JSONResponse(status_code=500, content=result.model_dump(mode="json"))
     return result

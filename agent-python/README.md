@@ -93,3 +93,49 @@ curl -X POST "http://localhost:8000/docs#/default/inventory_risk_tools_inventory
 ```
 
 Swagger UI는 `http://localhost:8000/docs`에서 확인할 수 있습니다.
+
+
+## 13~15번 Tool curl 테스트
+
+### 13. Customer Profile / Customer Brief
+
+```bash
+curl -X POST "http://localhost:8000/tools/customer-brief" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "CUST_A",
+    "start_month": "2026-01",
+    "end_month": "2026-06"
+  }'
+```
+
+### 14. Competitor News
+
+```bash
+curl -X POST "http://localhost:8000/tools/competitor-news" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "start_date": "2026-04-01",
+    "end_date": "2026-06-30",
+    "companies": ["BOE", "CSOT", "LGD"],
+    "category": null,
+    "impact_level": null,
+    "keyword": "OLED",
+    "product_group": null
+  }'
+```
+
+### 15. Briefing Report
+
+```bash
+curl -X POST "http://localhost:8000/agent/briefing" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic": "2026년 2분기 사업 리뷰",
+    "customer_id": "CUST_A",
+    "start_date": "2026-04-01",
+    "end_date": "2026-06-30",
+    "sections": ["sales", "orders", "inventory", "competitor_news", "recommended_actions"],
+    "tool_results": {}
+  }'
+```

@@ -28,7 +28,7 @@ cd D:\eclipse\workspace\deepsightAgent\agent-python
 정상 결과 예시:
 
 ```text
-Ran 18 tests
+Ran 31 tests
 OK
 ```
 
@@ -53,6 +53,27 @@ cd D:\eclipse\workspace\deepsightAgent\agent-python
 ```powershell
 cd D:\eclipse\workspace\deepsightAgent\agent-python
 .venv\Scripts\python.exe -m unittest tests.test_inventory_tool
+```
+
+### 4.4 고객사 프로필 Tool 테스트
+
+```powershell
+cd D:\eclipse\workspace\deepsightAgent\agent-python
+.venv\Scripts\python.exe -m unittest tests.test_customer_tool
+```
+
+### 4.5 경쟁사 뉴스 Tool 테스트
+
+```powershell
+cd D:\eclipse\workspace\deepsightAgent\agent-python
+.venv\Scripts\python.exe -m unittest tests.test_news_tool
+```
+
+### 4.6 브리핑 Tool 테스트
+
+```powershell
+cd D:\eclipse\workspace\deepsightAgent\agent-python
+.venv\Scripts\python.exe -m unittest tests.test_briefing_tool
 ```
 
 ## 5. FastAPI Tool 라우트 테스트
@@ -80,6 +101,9 @@ cd D:\eclipse\workspace\deepsightAgent\agent-python
 | `최근 6개월 OLED 판매 동향 분석해줘` | `sales_trend_tool` |
 | `OLED 수주 현황과 납기 지연 확인해줘` | `order_status_tool` |
 | `TV OLED 재고 리스크 확인해줘` | `inventory_risk_tool` |
+| `CUST_A 고객사 프로필 확인해줘` | `customer_profile_tool` |
+| `LGD 경쟁사 뉴스 확인해줘` | `competitor_news_tool` |
+| `CUST_A 대상 브리핑 보고서 만들어줘` | `briefing_report_tool` |
 
 ## 7. 문법 체크
 
@@ -90,7 +114,7 @@ cd D:\eclipse\workspace\deepsightAgent\agent-python
 .venv\Scripts\python.exe -m py_compile `
   app\main.py `
   app\db.py `
-  app\graph\agent.py `
+  app\agent\agent.py `
   app\schemas\common.py `
   app\schemas\tool_schema.py
 ```
@@ -103,7 +127,7 @@ cd D:\eclipse\workspace\deepsightAgent\agent-python
 
 ```powershell
 cd D:\eclipse\workspace\deepsightAgent\agent-python
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+.\run.bat
 ```
 
 Swagger 문서:
@@ -164,6 +188,36 @@ Invoke-RestMethod `
   -Body '{"question":"TV OLED 재고 리스크 확인해줘"}'
 ```
 
+### 10.4 고객사 프로필 질문
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/chat" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"question":"CUST_A 고객사 프로필 확인해줘"}'
+```
+
+### 10.5 경쟁사 뉴스 질문
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/chat" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"question":"LGD 경쟁사 뉴스 확인해줘"}'
+```
+
+### 10.6 브리핑 보고서 질문
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/chat" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"question":"CUST_A 대상 브리핑 보고서 만들어줘"}'
+```
+
 ## 11. Tool 직접 API 테스트
 
 ### 11.1 판매 동향 Tool
@@ -196,6 +250,36 @@ Invoke-RestMethod `
   -Body '{"inventory_month":"2026-06","product_group":"TV OLED"}'
 ```
 
+### 11.4 고객사 프로필 Tool
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/tools/customer-brief" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"customer_id":"CUST_A","start_month":"2026-01","end_month":"2026-06"}'
+```
+
+### 11.5 경쟁사 뉴스 Tool
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/tools/competitor-news" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"start_date":"2026-04-01","end_date":"2026-06-30","companies":["BOE","CSOT","LGD"],"category":null,"impact_level":null,"keyword":"OLED","product_group":null}'
+```
+
+### 11.6 브리핑 Report Tool
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/briefing" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"topic":"2026년 2분기 사업 리뷰","customer_id":"CUST_A","start_date":"2026-04-01","end_date":"2026-06-30","sections":["sales","orders","inventory","competitor_news","recommended_actions"],"tool_results":{}}'
+```
+
 ## 12. curl.exe로 테스트하는 방법
 
 PowerShell에서 `curl`은 `Invoke-WebRequest` 별칭이다. 일반 curl 문법을 쓰려면 반드시 `curl.exe`를 사용한다.
@@ -213,11 +297,15 @@ PowerShell에서는 보통 `Invoke-RestMethod`를 쓰는 편이 응답 확인이
 전체 테스트 실행 중 아래 로그가 보일 수 있다.
 
 ```text
+Failed to execute get_sales_trend
+Failed to execute get_order_status
 Failed to execute get_inventory_risk
+Failed to execute get_customer_profile
+Failed to execute search_competitor_news
 RuntimeError: database unavailable
 ```
 
-이 로그는 DB 오류 처리 테스트에서 의도적으로 발생시키는 값이다. 마지막 결과가 `OK`이면 테스트는 성공이다.
+이 로그는 각 Tool의 DB 오류 처리 테스트에서 의도적으로 발생시키는 값이다. 마지막 결과가 `OK`이면 테스트는 성공이다.
 
 아래 경고도 테스트 실패 원인은 아니다.
 

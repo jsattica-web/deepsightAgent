@@ -9,11 +9,17 @@ from langchain_core.tools import tool
 from pydantic import PrivateAttr
 
 from app.schemas.tool_schema import (
+    BriefingRequest,
+    CompetitorNewsRequest,
+    CustomerProfileRequest,
     InventoryRiskRequest,
     OrderStatusRequest,
     SalesTrendRequest,
 )
+from app.tools.briefing_tool import create_briefing_report
+from app.tools.customer_tool import get_customer_profile
 from app.tools.inventory_tool import get_inventory_risk
+from app.tools.news_tool import search_competitor_news
 from app.tools.order_tool import get_order_status
 from app.tools.sales_tool import get_sales_trend
 
@@ -23,6 +29,7 @@ DEFAULT_END_MONTH = "2026-06"
 DEFAULT_START_DATE = "2026-01-01"
 DEFAULT_END_DATE = "2026-06-30"
 DEFAULT_INVENTORY_MONTH = "2026-06"
+DEFAULT_CUSTOMER_ID = "CUST_A"
 
 
 @tool
@@ -62,6 +69,46 @@ def inventory_risk_tool(question: str) -> dict[str, Any]:
     result = get_inventory_risk(request)
     return build_inventory_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
 
+@tool
+def customer_profile_tool(question: str) -> dict[str, Any]:
+    """고객, 고객사, 프로필 질문에 대해 고객사 정보를 조회한다."""
+    request = CustomerProfileRequest(
+        customer_id=extract_customer_id(question),
+        start_month=DEFAULT_START_MONTH,
+        end_month=DEFAULT_END_MONTH,
+    )
+    result = get_customer_profile(request)
+    return build_customer_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
+
+
+@tool
+def competitor_news_tool(question: str) -> dict[str, Any]:
+    """경쟁사, 뉴스, 시장 이슈 질문에 대해 경쟁사 뉴스를 조회한다."""
+    request = CompetitorNewsRequest(
+        start_date=DEFAULT_START_DATE,
+        end_date=DEFAULT_END_DATE,
+        companies=extract_companies(question),
+        category=None,
+        impact_level=extract_impact_level(question),
+        keyword=extract_news_keyword(question),
+        product_group=extract_product_group(question),
+    )
+    result = search_competitor_news(request)
+    return build_news_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
+
+
+@tool
+def briefing_report_tool(question: str) -> dict[str, Any]:
+    """브리핑, 보고서, 리포트 질문에 대해 브리프북 초안을 생성한다."""
+    request = BriefingRequest(
+        topic=question,
+        customer_id=extract_customer_id(question),
+        start_date=DEFAULT_START_DATE,
+        end_date=DEFAULT_END_DATE,
+        tool_results={},
+    )
+    result = create_briefing_report(request)
+    return build_briefing_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
 
 class RuleBasedChatModel(BaseChatModel):
     """PoC용 ChatModel이다.
@@ -126,7 +173,14 @@ def build_agent():
     """Display Market Intelligence Agent를 생성한다."""
     return create_agent(
         model=RuleBasedChatModel(),
-        tools=[sales_trend_tool, order_status_tool, inventory_risk_tool],
+        tools=[
+            sales_trend_tool,
+            order_status_tool,
+            inventory_risk_tool,
+            customer_profile_tool,
+            competitor_news_tool,
+            briefing_report_tool,
+        ],
         system_prompt=(
             "You are a Display Market Intelligence Agent. "
             "Select the best tool and return its JSON result."
@@ -149,6 +203,21 @@ def choose_tool_name(question: str) -> str | None:
     normalized = question.lower()
 
     # 여러 키워드가 섞일 수 있어 더 구체적인 업무 질문부터 먼저 확인한다.
+    if has_any_keyword(
+        normalized,
+        ["브리핑", "브리프", "보고서", "리포트", "briefing", "report"],
+    ):
+        return "briefing_report_tool"
+    if has_any_keyword(
+        normalized,
+        ["뉴스", "경쟁사", "시장 이슈", "competitor", "news", "boe", "csot", "lgd"],
+    ):
+        return "competitor_news_tool"
+    if has_any_keyword(
+        normalized,
+        ["고객", "고객사", "프로필", "customer", "profile", "cust_"],
+    ):
+        return "customer_profile_tool"
     if has_any_keyword(
         normalized,
         ["재고", "안전재고", "과잉", "부족", "inventory", "stock", "risk"],
@@ -183,6 +252,45 @@ def extract_product_group(question: str) -> str:
         return "Automotive Display"
     return "Mobile OLED"
 
+def extract_customer_id(question: str) -> str:
+    """질문에서 CUST_A 같은 고객사 ID를 찾고, 없으면 기본 고객사를 사용한다."""
+    normalized = question.upper()
+    for letter in "ABCDEFGHIJKLMNOPQRSTUV":
+        customer_id = f"CUST_{letter}"
+        if customer_id in normalized:
+            return customer_id
+    return DEFAULT_CUSTOMER_ID
+
+
+def extract_companies(question: str) -> list[str] | None:
+    """질문에 포함된 경쟁사 이름을 찾아 뉴스 검색 조건으로 사용한다."""
+    normalized = question.upper()
+    companies = []
+    for company in ["BOE", "CSOT", "LGD", "SAMSUNG", "VISIONOX", "TIANMA"]:
+        if company in normalized:
+            companies.append(company)
+    return companies or None
+
+
+def extract_impact_level(question: str) -> str | None:
+    """질문에 영향도 표현이 있으면 HIGH, MEDIUM, LOW 중 하나로 변환한다."""
+    normalized = question.lower()
+    if "high" in normalized or "고영향" in normalized or "높은" in normalized:
+        return "HIGH"
+    if "medium" in normalized or "중간" in normalized:
+        return "MEDIUM"
+    if "low" in normalized or "저영향" in normalized or "낮은" in normalized:
+        return "LOW"
+    return None
+
+
+def extract_news_keyword(question: str) -> str | None:
+    """뉴스 검색용 간단 키워드를 고른다."""
+    normalized = question.lower()
+    for keyword in ["oled", "lcd", "capacity", "price", "supply", "demand"]:
+        if keyword in normalized:
+            return keyword.upper()
+    return None
 
 def extract_order_status(question: str) -> str | None:
     """질문에 주문 상태 키워드가 있으면 Tool 요청값으로 변환한다."""
@@ -315,6 +423,102 @@ def build_inventory_answer(
         tool_result=tool_result,
     )
 
+def build_customer_answer(
+    tool_args: dict[str, Any],
+    tool_result: dict[str, Any],
+) -> dict[str, Any]:
+    """고객 Tool 결과를 화면 공통 응답 구조로 바꾼다."""
+    customer_id = tool_args.get("customer_id", DEFAULT_CUSTOMER_ID)
+    data = tool_result.get("data", [])
+
+    if not data:
+        answer = f"{customer_id} 고객사 프로필 데이터가 없습니다."
+    else:
+        customer = data[0]
+        answer = (
+            f"{customer.get('customer_name', customer_id)} 고객사 프로필을 조회했습니다. "
+            f"판매량은 {int(customer.get('sales_qty', 0)):,}개, "
+            f"수주량은 {int(customer.get('order_qty', 0)):,}개입니다."
+        )
+
+    return success_answer(
+        answer=answer,
+        summary=tool_result.get("summary", ""),
+        table_title=f"{customer_id} 고객사 프로필",
+        table_columns=[
+            "customer_id",
+            "customer_name",
+            "segment",
+            "region",
+            "tier",
+            "main_application",
+            "sales_qty",
+            "sales_revenue",
+            "order_count",
+            "order_qty",
+            "delayed_order_count",
+        ],
+        table_data=data,
+        chart_title=f"{customer_id} 판매·수주 요약",
+        tool_result=tool_result,
+    )
+
+
+def build_news_answer(
+    tool_args: dict[str, Any],
+    tool_result: dict[str, Any],
+) -> dict[str, Any]:
+    """뉴스 Tool 결과를 화면 공통 응답 구조로 바꾼다."""
+    start_date = tool_args.get("start_date", DEFAULT_START_DATE)
+    end_date = tool_args.get("end_date", DEFAULT_END_DATE)
+    data = tool_result.get("data", [])
+
+    if not data:
+        answer = f"{start_date}부터 {end_date}까지 조건에 맞는 경쟁사 뉴스가 없습니다."
+    else:
+        answer = (
+            f"{start_date}부터 {end_date}까지 경쟁사 뉴스 {len(data)}건을 확인했습니다. "
+            f"가장 영향도가 높은 뉴스는 '{data[0].get('title')}'입니다."
+        )
+
+    return success_answer(
+        answer=answer,
+        summary=tool_result.get("summary", ""),
+        table_title="경쟁사 뉴스",
+        table_columns=[
+            "news_date",
+            "company",
+            "category",
+            "title",
+            "impact_score",
+            "impact_level",
+            "product_group",
+        ],
+        table_data=data,
+        chart_title="경쟁사별 뉴스 건수",
+        tool_result=tool_result,
+    )
+
+
+def build_briefing_answer(
+    tool_args: dict[str, Any],
+    tool_result: dict[str, Any],
+) -> dict[str, Any]:
+    """브리핑 Tool 결과를 화면 공통 응답 구조로 바꾼다."""
+    topic = tool_args.get("topic", "브리핑")
+    data = tool_result.get("data", [])
+
+    answer = f"'{topic}' 브리핑 초안을 {len(data)}개 섹션으로 생성했습니다."
+
+    return success_answer(
+        answer=answer,
+        summary=tool_result.get("summary", ""),
+        table_title="브리핑 섹션",
+        table_columns=["order", "section", "key_message"],
+        table_data=data,
+        chart_title="브리핑 구성",
+        tool_result=tool_result,
+    )
 
 def success_answer(
     *,
@@ -350,11 +554,11 @@ def unsupported_answer(question: str) -> dict[str, Any]:
         "message": "요청이 정상 처리되었습니다.",
         "data": {
             "answer": (
-                "현재 PoC에서는 판매 동향, 수주 현황, 재고 리스크 질문을 지원합니다. "
+                "현재 PoC에서는 판매 동향, 수주 현황, 재고 리스크, 고객 프로필, 경쟁사 뉴스, 브리핑 질문을 지원합니다. "
                 "예: 최근 6개월 OLED 판매 동향 분석해줘"
             ),
             "summary": [
-                "지원 질문 유형: sales_trend, order_status, inventory_risk",
+                "지원 질문 유형: sales_trend, order_status, inventory_risk, customer_profile, competitor_news, briefing_report",
                 f"입력 질문: {question}",
             ],
             "tables": [],
@@ -362,7 +566,7 @@ def unsupported_answer(question: str) -> dict[str, Any]:
             "insights": [],
             "risk_signals": [],
             "actions": [
-                "판매, 매출, 수주, 주문, 납기, 재고, 안전재고, 리스크 키워드를 포함해 다시 질문해보세요."
+                "판매, 수주, 재고, 고객, 경쟁사, 뉴스, 브리핑 키워드를 포함해 다시 질문해보세요."
             ],
         },
         "error": None,
@@ -384,11 +588,13 @@ def charts_from_tool_result(tool_result: dict[str, Any], title: str) -> list[dic
     if not chart_data:
         return []
 
+    labels = chart_data.get("x") or chart_data.get("categories", [])
+
     return [
         {
             "type": chart_data.get("type"),
             "title": title,
-            "labels": chart_data.get("x", []),
+            "labels": labels,
             "datasets": [
                 {
                     "label": series.get("name"),

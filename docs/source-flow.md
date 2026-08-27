@@ -9,7 +9,7 @@
 | 순서 | 파일 | 먼저 볼 내용 |
 | --- | --- | --- |
 | 1 | `agent-python/app/main.py` | FastAPI API가 어디서 시작되는지 |
-| 2 | `agent-python/app/graph/agent.py` | Agent가 질문을 받고 어떤 Tool을 고르는지 |
+| 2 | `agent-python/app/agent/agent.py` | Agent가 질문을 받고 어떤 Tool을 고르는지 |
 | 3 | `agent-python/app/tools/*.py` | 실제 DB 조회와 분석을 어떻게 하는지 |
 | 4 | `agent-python/app/schemas/*.py` | Request/Response 데이터 구조가 어떻게 생겼는지 |
 | 5 | `agent-python/app/db.py` | PostgreSQL 연결을 어떻게 가져오는지 |
@@ -31,15 +31,21 @@ agent-python/app/main.py
   +-- /agent/chat
   |     |
   |     v
-  |   agent-python/app/graph/agent.py
+  |   agent-python/app/agent/agent.py
   |     |
   |     +-- sales_trend_tool
   |     +-- order_status_tool
   |     +-- inventory_risk_tool
+  |     +-- customer_profile_tool
+  |     +-- competitor_news_tool
+  |     +-- briefing_report_tool
   |
   +-- /tools/sales-trend
   +-- /tools/order-status
   +-- /tools/inventory-risk
+  +-- /tools/customer-brief
+  +-- /tools/competitor-news
+  +-- /agent/briefing
         |
         v
       agent-python/app/tools/*.py
@@ -68,7 +74,7 @@ agent-python/app/main.py
 | 공통 오류 처리 | `validation_exception_handler()`, `unexpected_exception_handler()` | 요청 오류와 서버 오류를 공통 JSON으로 반환한다. |
 | 헬스체크 | `GET /health` | 서버와 DB 연결 상태를 확인한다. |
 | Agent 실행 | `POST /agent/chat` | 자연어 질문을 `run_agent()`로 넘긴다. |
-| Tool 직접 실행 | `POST /tools/...` | 판매, 수주, 재고 Tool을 직접 호출한다. |
+| Tool 직접 실행 | `POST /tools/...` | 판매, 수주, 재고, 고객사, 경쟁사 뉴스, 브리핑 Tool을 직접 호출한다. |
 
 ### 3.1 `/agent/chat` 실행 흐름
 
@@ -138,7 +144,14 @@ from langchain.agents import create_agent
 def build_agent():
     return create_agent(
         model=RuleBasedChatModel(),
-        tools=[sales_trend_tool, order_status_tool, inventory_risk_tool],
+        tools=[
+            sales_trend_tool,
+            order_status_tool,
+            inventory_risk_tool,
+            customer_profile_tool,
+            competitor_news_tool,
+            briefing_report_tool,
+        ],
         system_prompt="..."
     )
 ```
@@ -162,6 +175,9 @@ choose_tool_name(question)
   +-- sales_trend_tool
   +-- order_status_tool
   +-- inventory_risk_tool
+  +-- customer_profile_tool
+  +-- competitor_news_tool
+  +-- briefing_report_tool
   |
   v
 Tool 실행 결과를 JSON 응답으로 반환
@@ -176,11 +192,17 @@ Tool 실행 결과를 JSON 응답으로 반환
 | `판매`, `매출`, `동향`, `추이`, `sales`, `revenue`, `trend`, `oled` | `sales_trend_tool` |
 | `수주`, `주문`, `납기`, `지연`, `order`, `delivery`, `delayed` | `order_status_tool` |
 | `재고`, `안전재고`, `과잉`, `부족`, `inventory`, `stock`, `risk` | `inventory_risk_tool` |
+| `고객`, `고객사`, `프로필`, `customer`, `profile`, `cust_` | `customer_profile_tool` |
+| `뉴스`, `경쟁사`, `시장 이슈`, `competitor`, `news`, `boe`, `csot`, `lgd` | `competitor_news_tool` |
+| `브리핑`, `브리프`, `보고서`, `리포트`, `briefing`, `report` | `briefing_report_tool` |
 
 질문에 여러 키워드가 섞일 수 있으므로 현재는 아래 순서로 먼저 검사한다.
 
 ```text
-재고 질문
+브리핑 질문
+-> 경쟁사 뉴스 질문
+-> 고객사 프로필 질문
+-> 재고 질문
 -> 수주 질문
 -> 판매 질문
 -> 미지원 질문
@@ -188,13 +210,16 @@ Tool 실행 결과를 JSON 응답으로 반환
 
 ## 6. Tool Wrapper 흐름
 
-`agent.py`에는 `@tool`이 붙은 함수 3개가 있다.
+`agent.py`에는 `@tool`이 붙은 함수 6개가 있다.
 
 | 함수 | 실제 호출 Tool | 역할 |
 | --- | --- | --- |
 | `sales_trend_tool()` | `get_sales_trend()` | 판매 질문을 Tool Request로 바꾸고 판매 Tool을 실행 |
 | `order_status_tool()` | `get_order_status()` | 수주 질문을 Tool Request로 바꾸고 수주 Tool을 실행 |
 | `inventory_risk_tool()` | `get_inventory_risk()` | 재고 질문을 Tool Request로 바꾸고 재고 Tool을 실행 |
+| `customer_profile_tool()` | `get_customer_profile()` | 고객사 질문을 Tool Request로 바꾸고 고객 프로필 Tool을 실행 |
+| `competitor_news_tool()` | `search_competitor_news()` | 경쟁사 뉴스 질문을 Tool Request로 바꾸고 뉴스 Tool을 실행 |
+| `briefing_report_tool()` | `create_briefing_report()` | 브리핑 질문을 Tool Request로 바꾸고 브리핑 Tool을 실행 |
 
 예를 들어 판매 질문은 아래처럼 처리된다.
 
@@ -244,6 +269,9 @@ customer_id
 | `sales_tool.py` | `get_sales_trend()` | 월별 판매량, 매출, ASP를 조회하고 판매 추세를 분석한다. |
 | `order_tool.py` | `get_order_status()` | 월별 수주 건수, 수주량, 지연/취소 리스크를 분석한다. |
 | `inventory_tool.py` | `get_inventory_risk()` | 재고, 안전재고, 생산량, 판매량 기준으로 재고 리스크를 분석한다. |
+| `customer_tool.py` | `get_customer_profile()` | 고객 마스터와 기간별 판매·수주 요약을 조회한다. |
+| `news_tool.py` | `search_competitor_news()` | 경쟁사 뉴스와 영향도, 리스크 신호를 조회한다. |
+| `briefing_tool.py` | `create_briefing_report()` | 여러 Tool 결과를 브리핑 섹션으로 정리한다. |
 
 Tool 함수는 공통적으로 아래 흐름을 가진다.
 
@@ -336,6 +364,9 @@ conn.set_session(readonly=True, autocommit=False)
 | `tests/test_sales_tool.py` | 판매 Tool 함수 단위 테스트 |
 | `tests/test_order_tool.py` | 수주 Tool 함수 단위 테스트 |
 | `tests/test_inventory_tool.py` | 재고 Tool 함수 단위 테스트 |
+| `tests/test_customer_tool.py` | 고객사 프로필 Tool 함수 단위 테스트 |
+| `tests/test_news_tool.py` | 경쟁사 뉴스 Tool 함수 단위 테스트 |
+| `tests/test_briefing_tool.py` | 브리핑 Tool 함수 단위 테스트 |
 | `tests/test_main_tool_routes.py` | `/tools/...` 직접 API 라우트 테스트 |
 | `tests/test_workflow_tools.py` | `/agent/chat` Agent 라우팅 테스트 |
 
@@ -354,7 +385,7 @@ cd D:\eclipse\workspace\deepsightAgent\agent-python
 
 ```powershell
 cd D:\eclipse\workspace\deepsightAgent\agent-python
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+.\run.bat
 ```
 
 Swagger 확인:
@@ -393,6 +424,36 @@ Invoke-RestMethod `
   -Body '{"question":"TV OLED 재고 리스크 확인해줘"}'
 ```
 
+고객사 질문:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/chat" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"question":"CUST_A 고객사 프로필 확인해줘"}'
+```
+
+경쟁사 뉴스 질문:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/chat" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"question":"LGD 경쟁사 뉴스 확인해줘"}'
+```
+
+브리핑 질문:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/agent/chat" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"question":"CUST_A 대상 브리핑 보고서 만들어줘"}'
+```
+
 ## 13. 새 Tool을 추가할 때 수정할 곳
 
 새 Tool을 추가할 때는 아래 순서로 작업하면 된다.
@@ -401,9 +462,9 @@ Invoke-RestMethod `
 | --- | --- | --- |
 | 1 | `app/tools/new_tool.py` | 실제 Tool 함수 구현 |
 | 2 | `app/schemas/tool_schema.py` | Request, Response 모델 추가 |
-| 3 | `app/graph/agent.py` | `@tool` wrapper 함수 추가 |
-| 4 | `app/graph/agent.py` | `build_agent()`의 `tools` 목록에 추가 |
-| 5 | `app/graph/agent.py` | `choose_tool_name()`에 키워드 추가 |
+| 3 | `app/agent/agent.py` | `@tool` wrapper 함수 추가 |
+| 4 | `app/agent/agent.py` | `build_agent()`의 `tools` 목록에 추가 |
+| 5 | `app/agent/agent.py` | `choose_tool_name()`에 키워드 추가 |
 | 6 | `app/main.py` | 직접 테스트 API가 필요하면 `/tools/...` 엔드포인트 추가 |
 | 7 | `tests/` | Tool 단위 테스트와 Agent 라우팅 테스트 추가 |
 
@@ -414,7 +475,7 @@ Invoke-RestMethod `
 | 질문 키워드 추가 | `agent.py`의 `choose_tool_name()` |
 | 제품군 인식 규칙 추가 | `agent.py`의 `extract_product_group()` |
 | 수주 상태 인식 규칙 추가 | `agent.py`의 `extract_order_status()` |
-| 화면 응답 문장 수정 | `agent.py`의 `build_sales_answer()`, `build_order_answer()`, `build_inventory_answer()` |
+| 화면 응답 문장 수정 | `agent.py`의 `build_*_answer()` 함수 |
 | 표 컬럼 수정 | 각 `build_*_answer()` 함수의 `table_columns` |
 | 차트 구조 수정 | `agent.py`의 `charts_from_tool_result()` |
 | DB 연결 설정 수정 | `db.py` |

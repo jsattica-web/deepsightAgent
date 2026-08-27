@@ -4,13 +4,27 @@ Python 3.12, FastAPI, psycopg2 기반의 최소 판매 동향 Agent API입니다
 
 ## 로컬 실행
 
+가장 간단한 실행:
+
+```powershell
+.\run.bat
+```
+
+저장소 루트에서는 아래처럼 실행할 수 있습니다.
+
+```powershell
+.\run-agent.bat
+```
+
+초기 설치가 필요한 경우:
+
 ```powershell
 cd agent-python
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 $env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/postgres?sslmode=require"
-uvicorn app.main:app --reload
+.\run.bat
 ```
 
 `DATABASE_URL`에는 실제 접속 정보를 환경변수로 설정합니다. `.env`나 비밀번호는 저장소에 커밋하지 마세요.
@@ -32,7 +46,7 @@ Copy-Item .env.example .env
 # .env의 [YOUR-PASSWORD]를 Supabase DB password로 교체하거나,
 # 아래처럼 현재 PowerShell 세션에 직접 설정하세요.
 $env:DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.gcnzhbhhitiahvgchjty.supabase.co:5432/postgres?sslmode=require"
-uvicorn app.main:app --reload
+.\run.bat
 ```
 
 Supabase 공식 문서 기준으로, 장시간 실행되는 FastAPI 백엔드에서는 Direct connection을 우선 사용할 수 있습니다. 실행 환경이 IPv4-only라 direct host 접속이 실패하면 Dashboard의 Session pooler connection string을 `DATABASE_URL`에 넣어 사용하세요.
@@ -45,7 +59,7 @@ docker run --rm -p 8000:8000 -e DATABASE_URL="$env:DATABASE_URL" deepsight-agent
 ```
 
 ## 서버 띄우기 (supabase)
-python -m uvicorn app.main:app --reload --env-file .env.example
+.\run.bat --env-file .env.example
 
 ## curl 테스트
 

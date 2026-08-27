@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.db import db
-from app.graph.agent import run_agent
+from app.agent.agent import run_agent
 from app.schemas.common import ErrorResponse, HealthResponse
 from app.schemas.tool_schema import (
     BriefingRequest,

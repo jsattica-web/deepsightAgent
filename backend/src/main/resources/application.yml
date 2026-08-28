@@ -1,9 +1,0 @@
-server:
-  port: 8080
-
-agent:
-  api:
-    base-url: ${AGENT_API_BASE_URL:http://localhost:8000}
-    connect-timeout-ms: ${AGENT_API_CONNECT_TIMEOUT_MS:3000}
-    read-timeout-ms: ${AGENT_API_READ_TIMEOUT_MS:30000}
-

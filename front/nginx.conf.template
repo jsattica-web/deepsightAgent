@@ -20,12 +20,18 @@ server {
         return 200 'ok';
     }
 
-    # ---- A안 핵심: /api 요청을 Spring Boot 서비스로 중계한다 ----
+    # ---- A안 핵심: /api 요청을 agent-python 서비스로 중계한다 ----
     # 브라우저 입장에서는 오리진이 하나이므로 CORS가 발생하지 않는다.
+    # (agent-python에는 CORS 미들웨어가 없으므로 이 프록시가 반드시 필요하다.)
     location /api/ {
-        # 주의: BACKEND_URL 끝에 슬래시를 붙이면 안 된다.
-        #   http://host       -> /api/chat 이 /api/chat 으로 전달된다 (의도한 동작)
-        #   http://host/      -> /api/chat 이 /chat 으로 전달되어 prefix가 잘린다
+        # agent-python은 '/api' 프리픽스 없이 서빙한다.
+        #   /agent/chat, /agent/briefing, /tools/..., /health
+        # 따라서 프리픽스를 떼고 넘긴다. (예: /api/agent/chat -> /agent/chat)
+        # break를 쓰면 아래 proxy_pass가 재작성된 경로를 그대로 사용한다.
+        rewrite ^/api/(.*)$ /$1 break;
+
+        # 주의: proxy_pass에 경로를 붙이면 위 rewrite 결과가 무시된다.
+        # 호스트까지만 적어야 한다. BACKEND_URL 값은 agent-python의 Cloud Run URL이다.
         proxy_pass ${BACKEND_URL};
 
         # Cloud Run은 Host 헤더로 서비스를 라우팅하므로 대상 호스트로 맞춰야 한다.
@@ -34,7 +40,8 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # 백엔드를 공개하지 않기 위한 공유 시크릿. Spring 쪽에서 검증한다.
+        # 공유 시크릿 헤더. 현재 agent-python에는 이 값을 검증하는 코드가 없어
+        # 실질적인 보호 효과가 없다. 인증 방식이 정해지면 함께 정리해야 한다.
         proxy_set_header X-Internal-Token  "${INTERNAL_TOKEN}";
 
         # HTTPS 대상일 때 SNI를 보내야 Cloud Run이 라우팅할 수 있다.

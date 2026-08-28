@@ -3,6 +3,7 @@
 import { ref } from 'vue'
 import DeepSightPanel from './components/DeepSightPanel.vue'
 import ContentArea from './components/ContentArea.vue'
+import { askAgent } from './api/agent'
 
 const panelRef = ref(null)
 const activeSession = ref(null)
@@ -17,9 +18,27 @@ function onSelectSession(session) {
   activeSession.value = session
 }
 
-// ContentArea → DeepSightPanel : 질문 전송 시 좌측 목록에 세션 추가
-function onSubmit(text) {
-  activeSession.value = panelRef.value.addSession(text)
+// ContentArea → DeepSightPanel : 질문 전송 시 좌측 목록에 세션 추가 후 agent 호출
+// 세션 객체를 직접 갱신하므로, 응답이 늦게 와도 그 세션 화면에만 반영된다.
+// (사용자가 도중에 다른 세션을 선택해도 결과가 엉뚱한 곳에 붙지 않는다.)
+async function onSubmit(text) {
+  const session = panelRef.value.addSession(text)
+  activeSession.value = session
+
+  session.status = 'loading'
+  session.error = ''
+
+  try {
+    const result = await askAgent(text)
+    session.answer = result.answer
+    session.summary = result.summary
+    session.tables = result.tables
+    session.charts = result.charts
+    session.status = 'done'
+  } catch (e) {
+    session.error = e.message
+    session.status = 'error'
+  }
 }
 </script>
 

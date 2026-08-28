@@ -2,16 +2,21 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // 프론트엔드는 로컬/컨테이너 모두 8088을 사용한다.
-// Spring Boot 로컬 기본 포트(8080)와 겹치지 않게 분리한 값이다.
 const FRONT_PORT = 8088
-const BACKEND_ORIGIN = 'http://localhost:8080'
+
+// 프록시 대상은 agent-python(FastAPI)이다. 로컬 기본 포트는 8000이다.
+const AGENT_ORIGIN = 'http://localhost:8000'
 
 // 운영의 nginx 프록시와 동일한 규칙을 개발 서버에도 적용한다.
 // 덕분에 코드에서는 환경과 무관하게 '/api/...' 상대경로만 쓰면 된다.
+//
+// agent-python은 '/api' 프리픽스 없이 '/agent/chat', '/tools/...' 로 서빙하므로
+// nginx와 똑같이 프리픽스를 떼고 넘긴다. (예: /api/agent/chat -> /agent/chat)
 const proxy = {
   '/api': {
-    target: BACKEND_ORIGIN,
-    changeOrigin: true
+    target: AGENT_ORIGIN,
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/api/, '')
   }
 }
 

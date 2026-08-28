@@ -5,7 +5,7 @@
 // - ContentArea 와 상호작용:
 //     · new-session / select-session 이벤트를 상위(App)로 방출
 //     · addSession()을 노출하여 ContentArea 의 질문 전송 시 세션을 추가한다.
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import SessionList from './deepsight/SessionList.vue'
 import IconPlus from './icons/IconPlus.vue'
 import IconSun from './icons/IconSun.vue'
@@ -61,7 +61,21 @@ function clearAll() {
 
 // ContentArea 에서 질문을 전송하면 호출된다: 목록 맨 위에 세션을 추가하고 활성화
 function addSession(text) {
-  const session = { id: nextId++, text, time: '방금' }
+  // 세션 한 건의 형태를 여기서 한 번에 정의한다.
+  // status: 'idle' | 'loading' | 'done' | 'error'
+  // reactive로 감싸야 App.vue에서 응답을 채울 때 화면이 갱신된다.
+  // (raw 객체를 반환하면 배열 안의 프록시와 달라 변경 알림이 가지 않는다.)
+  const session = reactive({
+    id: nextId++,
+    text,
+    time: '방금',
+    status: 'idle',
+    answer: '',
+    summary: [],
+    tables: [],
+    charts: [],
+    error: ''
+  })
   sessions.value.unshift(session)
   activeId.value = session.id
   return session

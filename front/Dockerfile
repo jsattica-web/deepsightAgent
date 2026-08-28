@@ -31,7 +31,16 @@ ENV NGINX_ENVSUBST_FILTER="^(PORT|BACKEND_URL|INTERNAL_TOKEN)$"
 # Cloud Run은 PORT를 직접 주입하므로 이 값을 덮어쓴다.
 # 아래 기본값은 로컬에서 docker run 할 때만 쓰인다. (프론트는 8088로 통일)
 ENV PORT=8088
-ENV BACKEND_URL=http://localhost:8080
+
+# 프록시 대상은 agent-python 서비스다.
+# 운영에서는 배포로 발급된 Cloud Run URL을 --set-env-vars 로 주입한다.
+#   예) BACKEND_URL=https://agent-python-abc123-du.a.run.app
+# 아래 기본값은 자리표시자이며, 실행 시 반드시 덮어써야 한다.
+# (끝에 슬래시를 붙이지 않는다. nginx가 rewrite로 /api 프리픽스를 이미 제거한다.)
+ENV BACKEND_URL=https://agent-python-REPLACE-ME.a.run.app
+
+# nginx가 프록시 요청에 붙이는 공유 시크릿.
+# 현재 agent-python에는 검증 로직이 없어 비워 둔다.
 ENV INTERNAL_TOKEN=""
 
 EXPOSE 8088

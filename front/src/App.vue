@@ -34,6 +34,9 @@ async function onSubmit(text) {
     session.summary = result.summary
     session.tables = result.tables
     session.charts = result.charts
+    session.insights = result.insights
+    session.risk_signals = result.risk_signals
+    session.actions = result.actions
     session.status = 'done'
   } catch (e) {
     session.error = e.message

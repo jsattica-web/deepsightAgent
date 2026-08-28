@@ -56,10 +56,29 @@ agent-python을 먼저 올려 URL을 받고, 그 값을 front에 주입한다. �
 gcloud run deploy agent-python --source agent-python --region asia-northeast3
 ```
 
-DB 접속 정보 주입 (Secret Manager 권장):
+DB 접속 정보 주입. `DATABASE_URL`만 시크릿이고 `DB_POOL_MAX_SIZE`는 일반 설정값이다.
+`--set-*` 는 기존 값을 덮어쓰므로 **두 플래그를 한 명령에 함께** 준다.
 
 ```bash
-gcloud run services update agent-python --region asia-northeast3 --set-secrets DATABASE_URL=agent-db-url:latest
+gcloud run services update agent-python --region asia-northeast3 --set-secrets DATABASE_URL=agent-db-url:latest --set-env-vars DB_POOL_MAX_SIZE=5
+```
+
+나중에 하나만 바꿀 때는 병합 방식인 `--update-env-vars` / `--update-secrets` 를 쓴다.
+
+시크릿은 미리 만들어 두어야 한다. (`agent-db-url` 은 시크릿 이름, `latest` 는 버전이다.)
+
+```bash
+gcloud secrets create agent-db-url --data-file=db-url.txt
+```
+
+```bash
+gcloud secrets add-iam-policy-binding agent-db-url --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" --role=roles/secretmanager.secretAccessor
+```
+
+주입 결과 확인:
+
+```bash
+gcloud run services describe agent-python --region asia-northeast3 --format="yaml(spec.template.spec.containers[0].env)"
 ```
 
 ### 3-2. 발급된 URL 확인

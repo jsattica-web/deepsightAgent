@@ -66,10 +66,14 @@ export async function askAgent(question) {
   }
 
   const data = body.data ?? {}
+  // 서버 필드명을 그대로 유지한다. 화면에서 원본과 대조하기 쉬워야 한다.
   return {
     answer: data.answer ?? '',
     summary: data.summary ?? [],
     tables: data.tables ?? [],
-    charts: data.charts ?? []
+    charts: data.charts ?? [],
+    insights: data.insights ?? [],
+    risk_signals: data.risk_signals ?? [],
+    actions: data.actions ?? []
   }
 }

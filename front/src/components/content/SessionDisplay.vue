@@ -3,6 +3,8 @@
 // - 활성 세션이 없으면 히어로 인트로를 보여준다.
 // - 활성 세션이 있으면 질문과 agent 응답(요약/본문/표)을 출력한다.
 import IconChart from '../icons/IconChart.vue'
+import ChartBlock from './ChartBlock.vue'
+import DebugPanel from './DebugPanel.vue'
 
 defineProps({
   activeSession: { type: Object, default: null }
@@ -20,8 +22,22 @@ function formatCell(value) {
   <!-- 활성 세션이 없을 때: 히어로 인트로 -->
   <template v-if="!activeSession">
     <div class="hero__logo"><IconChart /></div>
-    <h1 class="hero__title">DeepSight</h1>
-    <p class="hero__subtitle">컨설팅 프레임 · ML 수요예측 · AI 보고서 자동 작성</p>
+    <h1 class="hero__title">Display 나침반</h1>
+    <!-- 팀 크레딧. 역할은 작게, 이름은 또렷하게 두어 대비를 준다. -->
+    <ul class="hero__credits">
+      <li class="hero__credit">
+        <span class="hero__credit-role">기획 및 설계</span>
+        <span class="hero__credit-name">김 파트장</span>
+      </li>
+      <li class="hero__credit">
+        <span class="hero__credit-role">화면 및 연계</span>
+        <span class="hero__credit-name">박 프로</span>
+      </li>
+      <li class="hero__credit">
+        <span class="hero__credit-role">ToolCalling &amp; Agent</span>
+        <span class="hero__credit-name">G최 프로 · J최 프로</span>
+      </li>
+    </ul>
   </template>
 
   <!-- 활성 세션이 있을 때: 질문 + 응답 출력 -->
@@ -40,6 +56,9 @@ function formatCell(value) {
 
     <!-- 정상 응답 -->
     <div v-else-if="activeSession.status === 'done'" class="msg msg--agent">
+      <!-- 오픈 전 테스트용. 공개 시 이 한 줄만 지우면 된다. -->
+      <DebugPanel :session="activeSession" />
+
       <!-- 요약 -->
       <ul v-if="activeSession.summary.length" class="answer__summary">
         <li v-for="(line, i) in activeSession.summary" :key="i">{{ line }}</li>
@@ -65,10 +84,13 @@ function formatCell(value) {
         </table>
       </div>
 
-      <!-- 차트는 아직 그리지 않는다. 라이브러리 도입 전까지 데이터가 왔다는 사실만 알린다. -->
-      <p v-if="activeSession.charts.length" class="answer__note">
-        차트 데이터 {{ activeSession.charts.length }}건이 함께 도착했습니다. (그래프 렌더링 미구현)
-      </p>
+      <!-- 차트. 표와 함께 보여준다(라이트 모드에서 일부 색이 대비 기준에 못 미쳐
+           표가 보조 수단 역할을 한다). -->
+      <ChartBlock
+        v-for="(chart, ci) in activeSession.charts"
+        :key="ci"
+        :chart="chart"
+      />
     </div>
   </div>
 </template>

@@ -213,7 +213,7 @@ class CompetitorNewsRequest(BaseModel):
             "example": {
                 "start_date": "2026-04-01",
                 "end_date": "2026-06-30",
-                "companies": ["BOE", "CSOT", "LGD"],
+                "companies": ["Samsung Display", "LG Display", "BOE"],
                 "category": None,
                 "impact_level": None,
                 "keyword": "OLED",
@@ -252,6 +252,9 @@ class CompetitorNewsPoint(BaseModel):
     impact_score: float
     impact_level: Literal["HIGH", "MEDIUM", "LOW"]
     product_group: str
+
+    # 같은 응답 안에서 DB 기사인지 NAVER 기사인지 구분합니다.
+    source: Literal["DB", "NAVER"] | None = None
 
 
 class CompetitorNewsResponse(ToolResponse):

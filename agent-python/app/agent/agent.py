@@ -99,16 +99,84 @@ def competitor_news_tool(question: str) -> dict[str, Any]:
 
 @tool
 def briefing_report_tool(question: str) -> dict[str, Any]:
-    """브리핑, 보고서, 리포트 질문에 대해 브리프북 초안을 생성한다."""
-    request = BriefingRequest(
-        topic=question,
-        customer_id=extract_customer_id(question),
+    """브리핑에 필요한 Tool 결과를 모아서 브리프북 초안을 생성한다.
+
+    Briefing Tool은 DB를 직접 조회하지 않는다.
+    대신 판매/수주/재고/경쟁사 뉴스 Tool의 실제 조회 함수를 먼저 호출하고,
+    그 결과를 tool_results에 모아서 create_briefing_report()에 전달한다.
+    """
+
+    # 1. 사용자의 질문에서 여러 Tool이 공통으로 사용할 조건을 먼저 꺼낸다.
+    customer_id = extract_customer_id(question)
+    product_group = extract_product_group(question)
+
+    # 2. 판매 동향 Tool을 실행한다.
+    #    특정 고객의 브리핑이므로 customer_id도 함께 전달한다.
+    sales_request = SalesTrendRequest(
+        start_month=DEFAULT_START_MONTH,
+        end_month=DEFAULT_END_MONTH,
+        product_group=product_group,
+        customer_id=customer_id,
+    )
+    sales_result = get_sales_trend(sales_request)
+
+    # 3. 수주 현황 Tool을 실행한다.
+    order_request = OrderStatusRequest(
         start_date=DEFAULT_START_DATE,
         end_date=DEFAULT_END_DATE,
-        tool_results={},
+        customer_id=customer_id,
+        product_group=product_group,
+        status=extract_order_status(question),
     )
+    order_result = get_order_status(order_request)
+
+    # 4. 재고 리스크 Tool을 실행한다.
+    #    현재 Inventory Tool은 고객사 조건 없이 제품군 기준으로 조회한다.
+    inventory_request = InventoryRiskRequest(
+        inventory_month=DEFAULT_INVENTORY_MONTH,
+        product_group=product_group,
+    )
+    inventory_result = get_inventory_risk(inventory_request)
+
+    # 5. 경쟁사 뉴스 Tool을 실행한다.
+    news_request = CompetitorNewsRequest(
+        start_date=DEFAULT_START_DATE,
+        end_date=DEFAULT_END_DATE,
+        companies=extract_companies(question),
+        category=None,
+        impact_level=extract_impact_level(question),
+        keyword=extract_news_keyword(question),
+        product_group=product_group,
+    )
+    news_result = search_competitor_news(news_request)
+
+    # 6. 각 Tool의 결과를 하나의 딕셔너리에 모은다.
+    #    DB나 파일에 저장하는 것이 아니라, 이번 브리핑 요청 동안만 사용하는 변수이다.
+    #    아래 key(sales, orders, inventory, competitor_news)는
+    #    briefing_tool.py의 section_key와 같은 이름을 사용해야 한다.
+    tool_results = {
+        "sales": sales_result,
+        "orders": order_result,
+        "inventory": inventory_result,
+        "competitor_news": news_result,
+    }
+
+    # 7. 모아 둔 Tool 결과를 BriefingRequest의 tool_results에 넣는다.
+    request = BriefingRequest(
+        topic=question,
+        customer_id=customer_id,
+        start_date=DEFAULT_START_DATE,
+        end_date=DEFAULT_END_DATE,
+        tool_results=tool_results,
+    )
+
+    # 8. briefing_tool.py는 tool_results를 읽어서 하나의 브리핑으로 조립한다.
     result = create_briefing_report(request)
-    return build_briefing_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
+
+    return build_briefing_answer(
+        request.model_dump(mode="json"),
+        result.model_dump(mode="json"),
+    )
 
 class RuleBasedChatModel(BaseChatModel):
     """PoC용 ChatModel이다.
@@ -468,24 +536,56 @@ def build_news_answer(
     tool_args: dict[str, Any],
     tool_result: dict[str, Any],
 ) -> dict[str, Any]:
-    """뉴스 Tool 결과를 화면 공통 응답 구조로 바꾼다."""
-    start_date = tool_args.get("start_date", DEFAULT_START_DATE)
-    end_date = tool_args.get("end_date", DEFAULT_END_DATE)
-    data = tool_result.get("data", [])
+    """
+    DB + NAVER 뉴스 Tool 결과를 화면 공통 응답 구조로 바꾼다.
+    """
+
+    data = tool_result.get(
+        "data",
+        [],
+    )
+
+    db_count = 0
+    naver_count = 0
+
+    for news in data:
+        source = news.get(
+            "source"
+        )
+
+        if source == "DB":
+            db_count += 1
+
+        elif source == "NAVER":
+            naver_count += 1
+
+    total_count = len(
+        data
+    )
 
     if not data:
-        answer = f"{start_date}부터 {end_date}까지 조건에 맞는 경쟁사 뉴스가 없습니다."
+        answer = (
+            "DB와 NAVER 뉴스 검색 결과 "
+            "조건에 맞는 경쟁사 뉴스가 없습니다."
+        )
+
     else:
         answer = (
-            f"{start_date}부터 {end_date}까지 경쟁사 뉴스 {len(data)}건을 확인했습니다. "
-            f"가장 영향도가 높은 뉴스는 '{data[0].get('title')}'입니다."
+            f"DB 검색 {db_count}건, "
+            f"NAVER 뉴스 {naver_count}건, "
+            f"총 {total_count}건의 경쟁사 뉴스를 "
+            f"확인했습니다."
         )
 
     return success_answer(
         answer=answer,
-        summary=tool_result.get("summary", ""),
+        summary=tool_result.get(
+            "summary",
+            "",
+        ),
         table_title="경쟁사 뉴스",
         table_columns=[
+            "source",
             "news_date",
             "company",
             "category",
@@ -498,7 +598,6 @@ def build_news_answer(
         chart_title="경쟁사별 뉴스 건수",
         tool_result=tool_result,
     )
-
 
 def build_briefing_answer(
     tool_args: dict[str, Any],

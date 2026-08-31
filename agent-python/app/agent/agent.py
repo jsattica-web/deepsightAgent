@@ -91,7 +91,7 @@ def competitor_news_tool(question: str) -> dict[str, Any]:
         category=None,
         impact_level=extract_impact_level(question),
         keyword=extract_news_keyword(question),
-        product_group=extract_product_group(question),
+        product_group=extract_news_product_group(question),
     )
     result = search_competitor_news(request)
     return build_news_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
@@ -320,6 +320,34 @@ def extract_product_group(question: str) -> str:
         return "Automotive Display"
     return "Mobile OLED"
 
+def extract_news_product_group(question: str) -> str | None:
+    """
+    뉴스 검색 전용 제품군 추출 함수입니다.
+
+    일반 Tool은 제품군이 없을 때 Mobile OLED를 기본값으로 사용하지만,
+    뉴스 검색에서는 사용자가 단순히 OLED라고 질문한 것을
+    Mobile OLED로 임의 변환하지 않습니다.
+    """
+    normalized = question.lower()
+
+    if "tv oled" in normalized:
+        return "TV OLED"
+    if "it oled" in normalized:
+        return "IT OLED"
+    if (
+        "mobile oled" in normalized
+        or "모바일 oled" in normalized
+        or "스마트폰 oled" in normalized
+    ):
+        return "Mobile OLED"
+    if "oled" in normalized:
+        return "OLED"
+    if "lcd" in normalized:
+        return "LCD"
+
+    return None
+
+
 def extract_customer_id(question: str) -> str:
     """질문에서 CUST_A 같은 고객사 ID를 찾고, 없으면 기본 고객사를 사용한다."""
     normalized = question.upper()
@@ -331,12 +359,31 @@ def extract_customer_id(question: str) -> str:
 
 
 def extract_companies(question: str) -> list[str] | None:
-    """질문에 포함된 경쟁사 이름을 찾아 뉴스 검색 조건으로 사용한다."""
+    """
+    질문에 포함된 경쟁사 이름을 찾아 뉴스 검색 조건으로 사용합니다.
+    한글 회사명과 영문/약어를 함께 처리합니다.
+    """
     normalized = question.upper()
-    companies = []
-    for company in ["BOE", "CSOT", "LGD", "SAMSUNG", "VISIONOX", "TIANMA"]:
-        if company in normalized:
-            companies.append(company)
+
+    company_keywords = {
+        "BOE": "BOE",
+        "CSOT": "CSOT",
+        "LGD": "LGD",
+        "LG디스플레이": "LGD",
+        "LG DISPLAY": "LGD",
+        "SAMSUNG": "SAMSUNG",
+        "삼성디스플레이": "SAMSUNG",
+        "SAMSUNG DISPLAY": "SAMSUNG",
+        "VISIONOX": "VISIONOX",
+        "TIANMA": "TIANMA",
+    }
+
+    companies: list[str] = []
+
+    for keyword, company_code in company_keywords.items():
+        if keyword in normalized and company_code not in companies:
+            companies.append(company_code)
+
     return companies or None
 
 

@@ -45,6 +45,7 @@ def _normalize_company_for_naver(company: str) -> str:
     aliases = {
         "LGD": "LG Display",
         "SDC": "Samsung Display",
+        "SAMSUNG": "Samsung Display",
         "TCL CSOT": "CSOT",
     }
 
@@ -95,6 +96,25 @@ def _build_naver_search_keywords(
             )
 
     return keywords
+
+
+def _matches_product_group(
+    news_product_group: str,
+    request_product_group: str,
+) -> bool:
+    """
+    NAVER 기사 제품군과 사용자 요청 제품군을 비교합니다.
+
+    OLED 계열은 정확히 같은 문자열이 아니더라도 같은 OLED 계열로
+    판단합니다. 예: OLED, AMOLED, QD-OLED, Mobile OLED.
+    """
+    news_value = news_product_group.lower().strip()
+    request_value = request_product_group.lower().strip()
+
+    if "oled" in news_value and "oled" in request_value:
+        return True
+
+    return news_value == request_value
 
 
 def _matches_naver_filters(
@@ -157,11 +177,11 @@ def _matches_naver_filters(
                 "product_group",
                 "",
             )
-        ).lower()
+        )
 
-        if (
-            news_product_group
-            != request.product_group.lower()
+        if not _matches_product_group(
+            news_product_group,
+            request.product_group,
         ):
             return False
 
@@ -194,7 +214,7 @@ def search_competitor_news(
     1. 기존 PostgreSQL market_news를 기존 조건 그대로 조회합니다.
     2. DB 결과를 CompetitorNewsPoint로 변환합니다.
     3. 같은 요청 조건으로 NAVER 뉴스 API도 추가 조회합니다.
-    4. NAVER 전일 뉴스에 필터를 적용합니다.
+    4. NAVER 최근 3일 뉴스에 필터를 적용합니다.
     5. DB 결과 + NAVER 결과를 합쳐 반환합니다.
 
     DB에는 INSERT하지 않습니다.
@@ -348,7 +368,7 @@ def search_competitor_news(
     try:
         crawl_result = crawl_news(
             keywords=naver_search_keywords,
-            previous_day_only=True,
+            recent_days=3,
         )
 
     except Exception:
@@ -461,7 +481,7 @@ def search_competitor_news(
             tool_name="search_competitor_news",
             status="success",
             summary=(
-                f"DB 검색 0건, NAVER 전일 뉴스 0건, "
+                f"DB 검색 0건, NAVER 최근 3일 뉴스 0건, "
                 f"총 0건입니다."
             ),
             data=[],
@@ -470,7 +490,7 @@ def search_competitor_news(
                     f"DB 조회 기간: "
                     f"{request.start_date} ~ {request.end_date}"
                 ),
-                "NAVER 뉴스 조회 기준: 전일",
+                "NAVER 뉴스 조회 기준: 최근 3일",
             ],
             risk_signals=[],
             chart_data={
@@ -551,7 +571,7 @@ def search_competitor_news(
     insights = [
         (
             f"DB 검색 {db_count}건, "
-            f"NAVER 전일 뉴스 {naver_count}건, "
+            f"NAVER 최근 3일 뉴스 {naver_count}건, "
             f"총 {total_count}건을 확인했습니다."
         ),
         (
@@ -559,7 +579,7 @@ def search_competitor_news(
             f"{request.start_date}부터 "
             f"{request.end_date}까지입니다."
         ),
-        "NAVER 뉴스는 전일 기준으로 추가 검색했습니다.",
+        "NAVER 뉴스는 최근 3일 기준으로 추가 검색했습니다.",
         (
             f"가장 많은 뉴스가 확인된 회사는 "
             f"{top_company}입니다."
@@ -642,7 +662,7 @@ def search_competitor_news(
         status="success",
         summary=(
             f"DB 검색 {db_count}건, "
-            f"NAVER 전일 뉴스 {naver_count}건, "
+            f"NAVER 최근 3일 뉴스 {naver_count}건, "
             f"총 {total_count}건을 확인했습니다."
         ),
         data=news_list,

@@ -418,19 +418,22 @@ def extract_product_group(
     return "DISPLAY"
 
 
-def filter_previous_day_news(
+def filter_recent_days_news(
     news_list: list[dict],
+    days: int = 3,
 ) -> list[dict]:
     """
-    오늘을 기준으로 전일에 발행된 기사만 반환합니다.
-    """
+    오늘을 포함해 최근 days일 동안 발행된 기사만 반환합니다.
 
-    yesterday = date.today() - timedelta(days=1)
+    예: 오늘이 2026-08-31이고 days=3이면
+    2026-08-29 ~ 2026-08-31 기사를 남깁니다.
+    """
+    today = date.today()
+    start_date = today - timedelta(days=days - 1)
 
     result = []
 
     for news in news_list:
-
         published_at = news.get("published_at", "")
 
         if not published_at:
@@ -441,11 +444,12 @@ def filter_previous_day_news(
                 published_at,
                 "%Y-%m-%d %H:%M:%S",
             )
-
         except ValueError:
             continue
 
-        if news_datetime.date() == yesterday:
+        news_date = news_datetime.date()
+
+        if start_date <= news_date <= today:
             result.append(news)
 
     return result

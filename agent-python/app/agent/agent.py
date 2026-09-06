@@ -40,6 +40,7 @@ def sales_trend_tool(question: str) -> dict[str, Any]:
         end_month=DEFAULT_END_MONTH,
         product_group=extract_product_group(question),
         customer_id=None,
+        group_by_customer=should_group_sales_by_customer(question),
     )
     result = get_sales_trend(request)
     return build_sales_answer(request.model_dump(mode="json"), result.model_dump(mode="json"))
@@ -283,11 +284,6 @@ def choose_tool_name(question: str) -> str | None:
         return "competitor_news_tool"
     if has_any_keyword(
         normalized,
-        ["고객", "고객사", "프로필", "customer", "profile", "cust_"],
-    ):
-        return "customer_profile_tool"
-    if has_any_keyword(
-        normalized,
         ["재고", "안전재고", "과잉", "부족", "inventory", "stock", "risk"],
     ):
         return "inventory_risk_tool"
@@ -301,8 +297,22 @@ def choose_tool_name(question: str) -> str | None:
         ["판매", "매출", "동향", "추이", "sales", "revenue", "trend", "oled"],
     ):
         return "sales_trend_tool"
+    if has_any_keyword(
+        normalized,
+        ["고객", "고객사", "프로필", "customer", "profile", "cust_"],
+    ):
+        return "customer_profile_tool"
     return None
 
+
+def should_group_sales_by_customer(question: str) -> bool:
+    """판매 질문에서 고객별 집계가 필요한지 판단한다.
+
+    "고객별"은 고객 프로필 조회가 아니라 판매 데이터를 고객 단위로 나누라는 뜻이다.
+    이 값을 SalesTrendRequest에 넘기면 판매 Tool이 월별+고객별로 group by 한다.
+    """
+    normalized = question.lower()
+    return any(keyword in normalized for keyword in ["고객별", "고객사별", "customer by", "by customer"])
 
 def extract_product_group(question: str) -> str:
     """질문에 포함된 키워드로 제품군을 추정한다."""
@@ -454,11 +464,23 @@ def build_sales_answer(
         answer=answer,
         summary=tool_result.get("summary", ""),
         table_title=f"{product_group} 판매 동향",
-        table_columns=["month", "qty", "revenue", "asp"],
+        table_columns=sales_table_columns(tool_args),
         table_data=data,
         chart_title=f"{product_group} 월별 판매 추이",
         tool_result=tool_result,
     )
+
+
+
+def sales_table_columns(tool_args: dict[str, Any]) -> list[str]:
+    """판매 조회 결과를 표로 보여줄 때 사용할 컬럼을 정한다.
+
+    일반 월별 조회는 기존 4개 컬럼만 보여준다. 고객별 조회에서는 고객 ID와
+    고객명을 앞에 붙여 같은 월 안에서도 고객별 매출 차이를 볼 수 있게 한다.
+    """
+    if tool_args.get("group_by_customer"):
+        return ["month", "customer_id", "customer_name", "qty", "revenue", "asp"]
+    return ["month", "qty", "revenue", "asp"]
 
 
 def build_order_answer(
@@ -789,3 +811,5 @@ def last_tool_message(messages: list[BaseMessage]) -> ToolMessage | None:
 def chat_result(message: AIMessage) -> ChatResult:
     """LangChain ChatModel이 요구하는 ChatResult 객체를 만든다."""
     return ChatResult(generations=[ChatGeneration(message=message)])
+
+

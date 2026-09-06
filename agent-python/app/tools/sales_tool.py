@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from psycopg2.extras import RealDictCursor
 
@@ -51,6 +52,49 @@ def _asp_direction(change_rate: float | None) -> str:
     return "ASP는 보합 수준입니다."
 
 
+def _chart_data(points: list[SalesTrendPoint], group_by_customer: bool) -> dict[str, Any]:
+    """화면 차트에 맞는 데이터를 만든다.
+
+    고객별 조회에서는 고객마다 매출 시리즈를 하나씩 만든다. 월별 전체 조회에서는
+    기존처럼 판매량, 매출, ASP를 함께 보여준다.
+    """
+    if not group_by_customer:
+        return {
+            "type": "line",
+            "x": [point.month for point in points],
+            "series": [
+                {"name": "qty", "data": [point.qty for point in points]},
+                {"name": "revenue", "data": [point.revenue for point in points]},
+                {"name": "asp", "data": [point.asp for point in points]},
+            ],
+        }
+
+    months = sorted({point.month for point in points})
+    customers = []
+    for point in points:
+        name = point.customer_name or point.customer_id or "Unknown"
+        if name not in customers:
+            customers.append(name)
+
+    series = []
+    for customer in customers:
+        values = []
+        for month in months:
+            matched = next(
+                (
+                    point
+                    for point in points
+                    if point.month == month
+                    and (point.customer_name or point.customer_id or "Unknown") == customer
+                ),
+                None,
+            )
+            values.append(matched.revenue if matched else 0)
+        series.append({"name": customer, "data": values})
+
+    return {"type": "line", "x": months, "series": series}
+
+
 def get_sales_trend(
     request: SalesTrendRequest,
 ) -> SalesTrendResponse | ErrorResponse:
@@ -66,9 +110,23 @@ def get_sales_trend(
         customer_filter = "and s.customer_id = %(customer_id)s"
         params["customer_id"] = request.customer_id
 
+    # 고객별 요청이면 select/group/order에 고객 컬럼을 추가한다.
+    # 문자열로 직접 조립하는 부분은 SQL 값이 아니라 고정된 SQL 조각만 사용한다.
+    customer_select = ""
+    customer_group = ""
+    customer_order = ""
+    if request.group_by_customer:
+        customer_select = """
+            c.customer_id,
+            c.customer_name,
+        """
+        customer_group = ", c.customer_id, c.customer_name"
+        customer_order = ", c.customer_name"
+
     query = f"""
         select
             to_char(s.sales_month, 'YYYY-MM') as month,
+            {customer_select}
             sum(s.qty)::bigint as total_qty,
             sum(s.revenue)::numeric(20, 2) as total_revenue,
             case when sum(s.qty) = 0 then 0
@@ -81,8 +139,8 @@ def get_sales_trend(
           and s.sales_month < %(end_exclusive)s
           and p.product_group = %(product_group)s
           {customer_filter}
-        group by s.sales_month
-        order by s.sales_month
+        group by s.sales_month{customer_group}
+        order by s.sales_month{customer_order}
     """
 
     try:
@@ -101,6 +159,8 @@ def get_sales_trend(
     points = [
         SalesTrendPoint(
             month=row["month"],
+            customer_id=row.get("customer_id"),
+            customer_name=row.get("customer_name"),
             qty=row["total_qty"],
             revenue=_as_float(row["total_revenue"]),
             asp=_as_float(row["avg_asp"]),
@@ -116,6 +176,21 @@ def get_sales_trend(
     if not points:
         summary = f"{request.product_group} 조건에 해당하는 판매 데이터가 없습니다."
         actions.append("조회 기간, 제품군 또는 고객사 조건을 확인하세요.")
+    elif request.group_by_customer:
+        customer_count = len({point.customer_id for point in points if point.customer_id})
+        total_revenue = sum(point.revenue for point in points)
+        top_customer = max(points, key=lambda point: point.revenue)
+        summary = (
+            f"최근 {months}개월 {request.product_group} 판매 매출을 "
+            f"{customer_count}개 고객 기준으로 월별 집계했습니다."
+        )
+        insights.append(f"조회 기간 총 매출은 {total_revenue:,.2f}입니다.")
+        insights.append(
+            f"단일 월 기준 최고 매출은 {top_customer.month} "
+            f"{top_customer.customer_name or top_customer.customer_id}의 {top_customer.revenue:,.2f}입니다."
+        )
+        actions.append("매출 비중이 큰 고객의 월별 증감 원인을 우선 확인하세요.")
+        actions.append("감소 고객은 수주 현황과 함께 확인해 이탈 가능성을 점검하세요.")
     else:
         first_qty = points[0].qty
         last_qty = points[-1].qty
@@ -156,15 +231,7 @@ def get_sales_trend(
         data=points,
         insights=insights,
         risk_signals=risk_signals,
-        chart_data={
-            "type": "line",
-            "x": [point.month for point in points],
-            "series": [
-                {"name": "qty", "data": [point.qty for point in points]},
-                {"name": "revenue", "data": [point.revenue for point in points]},
-                {"name": "asp", "data": [point.asp for point in points]},
-            ],
-        },
+        chart_data=_chart_data(points, request.group_by_customer),
         actions=actions,
     )
 

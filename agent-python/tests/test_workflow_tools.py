@@ -45,6 +45,43 @@ class WorkflowToolTests(unittest.TestCase):
         self.assertIn("판매 동향", response["data"]["answer"])
         tool.assert_called_once()
 
+    def test_agent_chat_routes_customer_grouped_sales_question_to_sales_tool(self):
+        response_model = SalesTrendResponse(
+            tool_name="get_sales_trend",
+            status="success",
+            summary="고객별 판매 동향 테스트 응답입니다.",
+            data=[
+                SalesTrendPoint(
+                    month="2026-01",
+                    customer_id="CUST_A",
+                    customer_name="Aster Mobile Systems",
+                    qty=100,
+                    revenue=1000.0,
+                    asp=10.0,
+                )
+            ],
+            insights=[],
+            risk_signals=[],
+            chart_data={
+                "type": "line",
+                "x": ["2026-01"],
+                "series": [{"name": "Aster Mobile Systems", "data": [1000.0]}],
+            },
+            actions=[],
+        )
+
+        with patch("app.agent.agent.get_sales_trend", return_value=response_model) as sales_tool, patch(
+            "app.agent.agent.get_customer_profile"
+        ) as customer_tool:
+            response = run_agent("최근 6개월 Mobile OLED 판매 매출 추이를 고객별 / 월별로 분석해줘")
+
+        self.assertEqual(response["status"], "success")
+        self.assertIn("판매 동향", response["data"]["answer"])
+        sales_tool.assert_called_once()
+        customer_tool.assert_not_called()
+        request = sales_tool.call_args.args[0]
+        self.assertTrue(request.group_by_customer)
+
     def test_agent_chat_routes_order_question_to_order_tool(self):
         response_model = OrderStatusResponse(
             tool_name="get_order_status",
@@ -201,3 +238,5 @@ class WorkflowToolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

@@ -16,6 +16,7 @@ class SalesTrendRequest(BaseModel):
                 "end_month": "2026-06",
                 "product_group": "Mobile OLED",
                 "customer_id": None,
+                "group_by_customer": False,
             }
         }
     )
@@ -24,6 +25,7 @@ class SalesTrendRequest(BaseModel):
     end_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-06"])
     product_group: str = Field(min_length=1, max_length=50, examples=["Mobile OLED"])
     customer_id: str | None = Field(default=None, max_length=30)
+    group_by_customer: bool = Field(default=False)
 
     @model_validator(mode="after")
     def validate_month_range(self) -> "SalesTrendRequest":
@@ -36,6 +38,10 @@ class SalesTrendRequest(BaseModel):
 class SalesTrendPoint(BaseModel):
     """판매 동향 차트와 표에 표시할 월별 집계 데이터이다."""
 
+    # 고객별 조회가 아닐 때는 customer_id/customer_name이 비어 있다.
+    # 같은 모델을 쓰면 기존 월별 조회와 고객별 월별 조회를 한 화면에서 처리하기 쉽다.
+    customer_id: str | None = None
+    customer_name: str | None = None
     month: str
     qty: int
     revenue: float
@@ -324,3 +330,5 @@ class BriefingResponse(ToolResponse):
 
     data: list[BriefingSection]
     chart_data: dict[str, Any]
+
+

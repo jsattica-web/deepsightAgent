@@ -1,0 +1,31 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'deepsightagent-git'
+      - '--image'
+      - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
+      - '--region'
+      - 'asia-northeast3'
+      - '--platform'
+      - 'managed'
+
+images:
+  - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

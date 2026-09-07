@@ -499,3 +499,11 @@
   line-height: 1.5;
   color: var(--text-muted);
 }
+
+/* 좁은 화면: 왼쪽 위에 고정된 햄버거가 본문 첫 줄을 가리지 않도록 위쪽을 비워 둔다.
+   (드로어 자체의 규칙은 deepsight-panel.css에 있다.) */
+@media (max-width: 900px) {
+  .hero {
+    padding: 60px 16px 24px;
+  }
+}

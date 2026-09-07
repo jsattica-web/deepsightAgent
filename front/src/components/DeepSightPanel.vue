@@ -11,8 +11,10 @@ import SessionList from './deepsight/SessionList.vue'
 import IconPlus from './icons/IconPlus.vue'
 import IconSun from './icons/IconSun.vue'
 import IconMoon from './icons/IconMoon.vue'
+import IconClose from './icons/IconClose.vue'
 
-const emit = defineEmits(['new-session', 'select-session'])
+// close: 좁은 화면에서 드로어로 열렸을 때 닫기 요청 (여닫는 상태는 App이 들고 있다)
+const emit = defineEmits(['new-session', 'select-session', 'close'])
 
 // 테마 토글 (다크 ↔ 라이트). 초기값은 수동 지정값 > OS 설정 순으로 결정한다.
 const theme = ref(
@@ -114,6 +116,15 @@ defineExpose({ addSession })
           @click="newSession"
         >
           <IconPlus />
+        </button>
+        <!-- 좁은 화면에서 드로어로 열렸을 때만 보인다(CSS) -->
+        <button
+          class="conv__add conv__close"
+          type="button"
+          aria-label="이력 닫기"
+          @click="emit('close')"
+        >
+          <IconClose />
         </button>
       </div>
     </div>

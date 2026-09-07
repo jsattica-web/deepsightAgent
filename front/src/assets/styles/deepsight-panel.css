@@ -127,3 +127,79 @@
 .conv__clear:hover {
   color: var(--text-muted);
 }
+
+/* ------------------------------------------------------------------
+   좁은 화면(모바일·태블릿): 이력을 햄버거로 여는 드로어로 바꾼다.
+   넓은 화면에서는 지금까지처럼 왼쪽에 항상 붙어 있는 칼럼이다.
+   ------------------------------------------------------------------ */
+
+/* 햄버거·드로어 닫기 버튼·배경은 넓은 화면에서 쓸 일이 없다.
+   (드로어가 열린 채로 창을 넓혀도 흔적이 남지 않도록 여기서 끈다.) */
+.panel-toggle,
+.conv__close,
+.panel-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  /* 흐름에서 빼내 화면 왼쪽에 겹쳐 놓는다. 덕분에 본문이 가로폭을 전부 쓴다. */
+  .conv {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    /* 화면이 아주 좁아도 본문이 조금은 비쳐야 '덮여 있다'는 게 읽힌다. */
+    width: min(var(--conv-w), 84vw);
+    /* 겹쳐 놓는 요소라 배경이 반드시 불투명해야 한다. */
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    box-shadow: 0 0 24px var(--menu-shadow);
+    transform: translateX(-100%);
+    /* 닫힌 동안에는 탭 이동으로도 닿지 않게 한다(애니메이션이 끝난 뒤 숨긴다). */
+    visibility: hidden;
+    transition: transform 0.22s ease, visibility 0s linear 0.22s,
+      background-color 0.25s ease, border-color 0.25s ease;
+  }
+
+  .conv.is-open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.22s ease, background-color 0.25s ease,
+      border-color 0.25s ease;
+  }
+
+  .conv__close {
+    display: inline-flex;
+  }
+
+  .panel-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .panel-toggle {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    font-size: 22px;
+    color: var(--text-muted);
+    background: var(--panel);
+    border: 1px solid var(--border-soft);
+  }
+
+  .panel-toggle:hover {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+}

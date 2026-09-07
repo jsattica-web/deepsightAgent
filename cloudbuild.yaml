@@ -4,7 +4,7 @@ steps:
       - 'build'
       - '-t'
       - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
-      - '.'
+      - './agent-python'
 
   - name: 'gcr.io/cloud-builders/docker'
     args:

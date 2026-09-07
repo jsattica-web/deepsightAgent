@@ -24,6 +24,22 @@ steps:
       - '--platform'
       - 'managed'
 
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'deepsightagent-git'
+      - '--image'
+      - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
+      - '--region'
+      - 'asia-northeast3'
+      - '--platform'
+      - 'managed'
+      - '--service-account'
+      - '901967281598-compute@developer.gserviceaccount.com'
+      - '--no-invoker-iam-check'      
+
 images:
   - 'asia-northeast3-docker.pkg.dev/firstporject-505913/deepsightagent-repo/deepsightagent-git:$COMMIT_SHA'
 

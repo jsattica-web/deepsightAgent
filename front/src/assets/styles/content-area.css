@@ -4,26 +4,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* 내용이 길어지면(표·차트가 붙으면) 여기서 스크롤한다.
-     justify-content: center를 쓰면 넘칠 때 위쪽이 잘려 스크롤로도 못 본다.
-     대신 아래 hero__inner의 auto 마진으로 '넘치지 않을 때만' 중앙 정렬한다. */
+  /* 표와 차트가 길어질 수 있으므로 가운데 영역 자체가 스크롤을 가진다. */
   justify-content: flex-start;
   overflow-y: auto;
-  padding: 40px 24px;
+  padding: 44px 28px;
 }
 
 .hero__inner {
   width: 100%;
-  max-width: 990px;
+  max-width: 1040px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* 여유 공간이 있으면 세로 중앙, 넘치면 위에서부터 쌓인다. */
+  /* 내용이 짧을 때는 중앙에 놓이고, 길어지면 위에서부터 자연스럽게 쌓인다. */
   margin: auto 0;
 }
 
 .hero__logo {
-  font-size: 44px;
+  font-size: 46px;
   color: var(--accent-title);
   margin-bottom: 12px;
 }
@@ -32,7 +30,7 @@
   font-size: 34px;
   font-weight: 700;
   color: var(--accent-title);
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .hero__subtitle {
@@ -41,8 +39,7 @@
   color: var(--text-muted);
 }
 
-/* 팀 크레딧 — 히어로 제목 아래 한 줄로 늘어놓고,
-   좁은 화면에서는 자연스럽게 여러 줄로 접힌다. */
+/* 팀 크레딧은 첫 화면의 보조 정보다. 제목보다 작고 조용하게 둔다. */
 .hero__credits {
   margin: 18px 0 0;
   padding: 0;
@@ -62,7 +59,6 @@
   position: relative;
 }
 
-/* 항목 사이 얇은 구분선. 첫 항목 앞에는 두지 않는다. */
 .hero__credit + .hero__credit::before {
   content: '';
   position: absolute;
@@ -85,7 +81,6 @@
   color: var(--text-muted);
 }
 
-/* 선택/전송된 질문 표시 (ContentArea 상호작용) */
 .hero__thread {
   width: 100%;
   display: flex;
@@ -97,9 +92,17 @@
 .msg {
   max-width: 80%;
   padding: 12px 16px;
-  border-radius: 14px;
+  border-radius: 8px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
+}
+
+.msg__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
 }
 
 .msg--user {
@@ -108,22 +111,60 @@
   color: var(--text);
 }
 
-/* agent 응답 말풍선 — 사용자 메시지는 우측, 응답은 좌측 전체폭으로 둔다 */
+.msg--user p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* agent 응답은 말풍선보다 리포트에 가깝게 전체 폭을 사용한다. */
 .msg--agent {
   align-self: flex-start;
   max-width: 100%;
   width: 100%;
-  margin-top: 12px;
-  background: transparent;
+  margin-top: 14px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
   border: 1px solid var(--border-soft);
   color: var(--text);
 }
 
 .msg--agent.is-loading {
+  padding: 18px;
   color: var(--text-muted);
 }
 
-/* 로딩 점 3개 순차 점멸 */
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.loading p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.loading__ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .dots i {
   font-style: normal;
   animation: dot-blink 1.2s infinite;
@@ -133,38 +174,122 @@
 
 @keyframes dot-blink {
   0%, 60%, 100% { opacity: 0.25; }
-  30%           { opacity: 1; }
+  30% { opacity: 1; }
 }
 
 .msg--error {
-  border-color: var(--secondary);
+  padding: 16px;
+  border-color: rgba(219, 83, 106, 0.55);
   color: var(--secondary);
 }
 
-.answer__summary {
-  margin: 0 0 12px;
-  padding-left: 18px;
+.answer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.answer__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--accent-title);
-  font-weight: 600;
+}
+
+.answer__title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.answer__status {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-title);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.answer__section {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.answer__section--highlight {
+  background: linear-gradient(180deg, var(--surface-hover), transparent);
+}
+
+.answer__section-title,
+.answer__table-title,
+.chart__title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.answer__summary,
+.answer__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+}
+
+.answer__summary li,
+.answer__list li {
+  margin-top: 6px;
+}
+
+.answer__summary li:first-child,
+.answer__list li:first-child {
+  margin-top: 0;
+}
+
+.answer__summary {
+  color: var(--accent-title);
+  font-weight: 700;
+}
+
+.answer__list--ordered {
+  padding-left: 20px;
 }
 
 .answer__text {
   margin: 0;
   white-space: pre-wrap;
-  line-height: 1.6;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+/* 세 개의 보조 섹션은 넓은 화면에서만 나란히 둔다. 좁으면 자동으로 한 줄씩 내려간다. */
+.answer__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.answer__grid .answer__section {
+  border-bottom: 0;
+  border-right: 1px solid var(--border-soft);
+}
+
+.answer__grid .answer__section:last-child {
+  border-right: 0;
 }
 
 .answer__table-wrap {
-  margin-top: 16px;
-  /* 열이 많은 표는 말풍선 안에서 가로 스크롤한다 */
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-soft);
   overflow-x: auto;
-}
-
-.answer__table-title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
 }
 
 .answer__table {
@@ -175,13 +300,12 @@
 
 .answer__table th,
 .answer__table td {
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--border-soft);
   text-align: right;
   white-space: nowrap;
 }
 
-/* 첫 열은 보통 기간/이름 같은 라벨이라 좌측 정렬이 읽기 쉽다 */
 .answer__table th:first-child,
 .answer__table td:first-child {
   text-align: left;
@@ -189,8 +313,13 @@
 
 .answer__table th {
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
+  background: var(--surface-hover);
   border-bottom-color: var(--border);
+}
+
+.answer__table tbody tr:hover {
+  background: var(--surface-hover);
 }
 
 .answer__note {
@@ -199,33 +328,28 @@
   color: var(--text-dim);
 }
 
-/* ── 차트 ───────────────────────────────────────────── */
 .chart {
-  margin-top: 20px;
+  padding: 18px 22px 22px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
-.chart__title {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
+.chart:last-child {
+  border-bottom: 0;
 }
 
 .chart__panel {
   margin-top: 12px;
 }
 
-/* 축을 나눴을 때 각 패널이 어떤 시리즈인지 알려주는 줄 */
 .chart__caption {
   margin: 0 0 4px;
   font-size: 12px;
   color: var(--text-dim);
 }
 
-/* Chart.js는 부모 높이를 따라간다. 캔버스에 직접 높이를 주면 안 된다. */
 .chart__canvas-wrap {
   position: relative;
-  height: 220px;
+  height: 240px;
 }
 
 .chart__note {
@@ -234,27 +358,22 @@
   color: var(--text-dim);
 }
 
-/* 입력 박스 */
-/* 입력창은 한 줄짜리 알약 모양이다.
-   textarea와 전송 버튼을 가로로 나란히 두고, 여러 줄 입력 시에만 세로로 늘어난다.
-   주의: 숨겨둔 툴바 컨트롤(모델/모드/소스)을 되살릴 때는
-   이 flex-direction을 column으로 되돌려야 두 줄 레이아웃이 복원된다. */
+/* 입력 박스는 질문 작성에만 집중하도록 한 줄형 컴포저로 둔다. */
 .composer {
   width: 100%;
-  margin-top: 36px;
+  margin-top: 34px;
   display: flex;
-  /* 여러 줄로 늘어나도 전송 버튼은 항상 세로 중앙에 둔다 */
   align-items: center;
   gap: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 24px;
-  padding: 8px 8px 8px 18px;
+  border-radius: 8px;
+  padding: 10px 10px 10px 16px;
 }
 
-/* 입력창에 포커스가 가면 테두리로 알려준다 */
 .composer:focus-within {
-  border-color: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .composer__input {
@@ -262,7 +381,6 @@
   min-width: 0;
   min-height: 24px;
   max-height: 180px;
-  /* 높이는 JS(autoResize)가 계산해 넣는다. 최대치를 넘으면 여기서 스크롤한다. */
   overflow-y: auto;
   resize: none;
   background: transparent;
@@ -278,130 +396,37 @@
   color: var(--text-dim);
 }
 
-.composer__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.composer__spacer {
-  flex: 1;
-}
-
-/* 툴바 버튼 공통 */
-.tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-  border: 1px solid transparent;
-}
-
-.tool:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.tool .icon {
-  font-size: 16px;
-}
-
-.tool--chip {
-  border-color: var(--border);
-}
-
-.tool--active {
-  color: var(--secondary);
-  border-color: rgba(219, 83, 106, 0.5);
-  background: rgba(219, 83, 106, 0.12);
-}
-
-.tool--deep {
-  color: var(--accent-title);
-  border-color: rgba(255, 182, 0, 0.5);
-  background: var(--accent-soft);
-}
-
-.tool--deep .icon {
-  color: var(--accent-title);
-}
-
-/* 소스 체크박스 선택 상태 (다중 선택) */
-.tool--chip.is-on {
-  color: var(--accent-title);
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-/* 모델 선택 드롭다운 */
-.model-select {
-  position: relative;
-  display: inline-flex;
-}
-
-.model-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  min-width: 150px;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: var(--menu-bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px var(--menu-shadow);
-  z-index: 20;
-}
-
-.model-option {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  text-align: left;
-  color: var(--text);
-}
-
-.model-option:hover {
-  background: var(--surface-hover);
-}
-
-.model-option.is-selected {
-  color: var(--accent-title);
-  font-weight: 500;
-}
-
 .composer__send {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   font-size: 18px;
-  color: var(--text-muted);
-  background: var(--surface-hover);
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
-.composer__send:hover {
-  background: var(--accent);
-  color: var(--on-accent);
+.composer__send:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.composer__send:disabled {
+  cursor: default;
+  color: var(--text-dim);
+  background: var(--surface-hover);
 }
 
 /* ── 오픈 전 테스트 패널 ─────────────────────────────
    정식 답변과 확실히 구분되도록 점선 테두리로 감싼다.
+   응답 카드가 padding: 0 이므로 여기서 바깥 여백을 직접 준다.
    공개 시 DebugPanel과 함께 이 블록도 지우면 된다. */
 .debug {
-  margin-bottom: 20px;
+  margin: 18px 22px;
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -410,6 +435,10 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
+}
+
+/* 펼쳤을 때만 머리글 아래 구분선을 둔다. 접힌 상태에서는 선이 뜬금없이 남는다. */
+.debug__head:not(:last-child) {
   border-bottom: 1px dashed var(--border);
 }
 
@@ -500,10 +529,44 @@
   color: var(--text-muted);
 }
 
+@media (max-width: 760px) {
+  .hero {
+    padding: 28px 16px;
+  }
+
+
+  .msg {
+    max-width: 100%;
+  }
+
+  .answer__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .answer__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .answer__grid .answer__section {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .answer__grid .answer__section:last-child {
+    border-bottom: 0;
+  }
+
+  .debug {
+    margin: 14px 16px;
+  }
+}
+
 /* 좁은 화면: 왼쪽 위에 고정된 햄버거가 본문 첫 줄을 가리지 않도록 위쪽을 비워 둔다.
-   (드로어 자체의 규칙은 deepsight-panel.css에 있다.) */
+   (드로어 자체의 규칙은 deepsight-panel.css에 있다.)
+   위 760px 블록보다 뒤에 둬야 그보다 좁은 폭에서도 이 여백이 살아남는다. */
 @media (max-width: 900px) {
   .hero {
-    padding: 60px 16px 24px;
+    padding-top: 60px;
   }
 }

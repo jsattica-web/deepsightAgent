@@ -87,6 +87,49 @@ class SalesTrendTests(unittest.TestCase):
         self.assertIn("join public.dim_customer", cursor.query)
         self.assertEqual(cursor.params["customer_id"], "CUST_A")
 
+    def test_returns_monthly_data_grouped_by_customer(self):
+        cursor = FakeCursor(
+            [
+                {
+                    "month": "2026-01",
+                    "customer_id": "CUST_A",
+                    "customer_name": "Aster Mobile Systems",
+                    "total_qty": 100,
+                    "total_revenue": Decimal("6000.00"),
+                    "avg_asp": Decimal("60.00"),
+                },
+                {
+                    "month": "2026-01",
+                    "customer_id": "CUST_B",
+                    "customer_name": "Bright View Devices",
+                    "total_qty": 80,
+                    "total_revenue": Decimal("4800.00"),
+                    "avg_asp": Decimal("60.00"),
+                },
+            ]
+        )
+        request = SalesTrendRequest(
+            start_month="2026-01",
+            end_month="2026-06",
+            product_group="Mobile OLED",
+            customer_id=None,
+            group_by_customer=True,
+        )
+
+        with patch(
+            "app.tools.sales_tool.get_connection",
+            return_value=FakeConnection(cursor),
+        ):
+            result = get_sales_trend(request)
+
+        self.assertIsInstance(result, SalesTrendResponse)
+        self.assertEqual(result.data[0].customer_id, "CUST_A")
+        self.assertEqual(result.data[0].customer_name, "Aster Mobile Systems")
+        self.assertIn("c.customer_id", cursor.query)
+        self.assertIn("c.customer_name", cursor.query)
+        self.assertIn("group by s.sales_month, c.customer_id, c.customer_name", cursor.query)
+        self.assertEqual(result.chart_data["series"][0]["name"], "Aster Mobile Systems")
+
     def test_returns_success_when_no_data_exists(self):
         cursor = FakeCursor([])
         with patch(
@@ -116,3 +159,4 @@ class SalesTrendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

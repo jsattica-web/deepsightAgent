@@ -41,7 +41,10 @@ function formatCell(value) {
   </template>
 
   <!-- 활성 세션이 있을 때: 질문 + 응답 출력 -->
-  <div v-else class="hero__thread">
+  <!-- key를 세션 id로 두어 좌측 이력에서 다른 세션을 고르면 이 아래를 통째로 새로 만든다.
+       (표·차트·디버그 패널이 앞 세션의 컴포넌트를 재사용하면서 옛 내용을 남기는 것을 막는다.
+        같은 세션 안에서 status만 loading→done으로 바뀔 때는 key가 그대로라 다시 만들지 않는다.) -->
+  <div v-else :key="activeSession.id" class="hero__thread">
     <div class="msg msg--user">{{ activeSession.text }}</div>
 
     <!-- 응답 대기 -->
@@ -68,7 +71,7 @@ function formatCell(value) {
       <p v-if="activeSession.answer" class="answer__text">{{ activeSession.answer }}</p>
 
       <!-- 표 -->
-      <div v-for="(table, ti) in activeSession.tables" :key="ti" class="answer__table-wrap">
+      <div v-for="(table, ti) in activeSession.tables" :key="`${activeSession.id}-${ti}`" class="answer__table-wrap">
         <h3 v-if="table.title" class="answer__table-title">{{ table.title }}</h3>
         <table class="answer__table">
           <thead>
@@ -88,7 +91,7 @@ function formatCell(value) {
            표가 보조 수단 역할을 한다). -->
       <ChartBlock
         v-for="(chart, ci) in activeSession.charts"
-        :key="ci"
+        :key="`${activeSession.id}-${ci}`"
         :chart="chart"
       />
     </div>

@@ -5,7 +5,7 @@
 // 두 축의 교차 지점은 작성자가 임의로 정하는 값이라, 눈금만 바꿔도
 // "함께 움직인다 / 엇갈린다"로 해석이 뒤집힌다. 없는 상관관계를 만들어낸다.
 // 대신 자릿수가 10배 넘게 차이 나는 시리즈는 차트를 나눠 각자의 축에 그린다.
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUpdate, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 
 Chart.register(...registerables)
@@ -22,7 +22,9 @@ const SERIES_COLORS = {
 }
 
 const theme = ref('dark')
-const canvasRefs = ref([])
+// v-for의 :ref 콜백은 인덱스에 채워 넣기만 한다. 그룹 수가 줄면 옛 canvas가 남으므로
+// 매 렌더 직전에 비운다. 그리기에만 쓰는 값이라 반응형으로 둘 필요는 없다.
+const canvasEls = []
 let instances = []
 let observer = null
 
@@ -76,7 +78,7 @@ function buildCharts() {
   const isBar = props.chart.type === 'bar'
 
   groups.value.forEach((group, gi) => {
-    const canvas = canvasRefs.value[gi]
+    const canvas = canvasEls[gi]
     if (!canvas) return
 
     const datasets = group.items.map((ds) => {
@@ -152,7 +154,14 @@ onMounted(() => {
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 })
 
-watch(theme, () => nextTick(buildCharts))
+onBeforeUpdate(() => {
+  canvasEls.length = 0
+})
+
+// 좌측 이력에서 다른 세션을 고르면 SessionDisplay가 이 컴포넌트를 재사용하고 prop만 갈아끼운다.
+// canvas는 Chart.js 인스턴스가 쥐고 있어 저절로 바뀌지 않으므로, chart가 바뀌면 다시 그린다.
+// (테마 토글도 같은 이유로 다시 그린다.)
+watch([theme, () => props.chart], () => nextTick(buildCharts))
 
 onBeforeUnmount(() => {
   observer?.disconnect()
@@ -170,7 +179,7 @@ onBeforeUnmount(() => {
         {{ group.items.map((i) => i.label).join(' · ') }}
       </p>
       <div class="chart__canvas-wrap">
-        <canvas :ref="(el) => (canvasRefs[gi] = el)"></canvas>
+        <canvas :ref="(el) => (canvasEls[gi] = el)"></canvas>
       </div>
     </div>
 

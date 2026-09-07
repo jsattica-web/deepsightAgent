@@ -4,6 +4,7 @@
 // - 활성 세션이 있으면 사용자의 질문과 agent 응답을 보기 좋은 보고서 형태로 보여준다.
 import IconChart from '../icons/IconChart.vue'
 import ChartBlock from './ChartBlock.vue'
+import DebugPanel from './DebugPanel.vue'
 
 defineProps({
   activeSession: { type: Object, default: null }
@@ -77,6 +78,11 @@ function hasItems(items) {
         </div>
         <span class="answer__status">완료</span>
       </header>
+
+      <!-- 오픈 전 테스트용. 기본은 접혀 있고, 펼치면 agent 응답 원본을 그대로 보여준다.
+           아래 정식 렌더링과 대조하는 것이 목적이라 답변보다 위에 둔다.
+           공개 시 이 한 줄만 지우면 된다. -->
+      <DebugPanel :session="activeSession" />
 
       <!-- 핵심 요약은 답변 최상단에 배치한다. 사용자가 긴 본문을 읽기 전에 결론을 먼저 볼 수 있다. -->
       <section v-if="hasItems(activeSession.summary)" class="answer__section answer__section--highlight">

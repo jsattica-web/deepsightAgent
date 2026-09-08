@@ -1,51 +1,88 @@
 from datetime import date
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.common import ToolResponse
 
 
+
+# 목록 안의 각 문자열에도 길이 제한을 적용한다.
+ProductGroup = Annotated[str, Field(min_length=1, max_length=50)]
+CustomerId = Annotated[str, Field(min_length=1, max_length=30)]
+OrderState = Literal["REQUESTED", "CONFIRMED", "DELAYED", "SHIPPED", "CANCELLED"]
+
+
+def validate_month_range(start_month: str, end_month: str) -> None:
+    """월 형식 검증 후 실제 달력과 조회 순서를 확인한다."""
+    date.fromisoformat(f"{start_month}-01")
+    date.fromisoformat(f"{end_month}-01")
+    if start_month > end_month:
+        raise ValueError("start_month는 end_month보다 늦을 수 없습니다.")
+
+
+def validate_unique_items(values: list[str] | None) -> list[str] | None:
+    """중복된 필터나 집계 항목을 허용하지 않는다."""
+    if values is not None and len(values) != len(set(values)):
+        raise ValueError("목록에 중복된 값이 있습니다.")
+    return values
+
+
 class SalesTrendRequest(BaseModel):
-    """판매 동향 Tool 요청값이다."""
+    """구조화된 판매 조회 조건이다. 단수형 필드는 사용하지 않는다."""
 
     model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
         json_schema_extra={
             "example": {
                 "start_month": "2026-01",
                 "end_month": "2026-06",
-                "product_group": "Mobile OLED",
-                "customer_id": None,
-                "group_by_customer": False,
+                "product_groups": ["Mobile OLED"],
+                "customer_ids": None,
+                "group_by": ["month"],
+                "metrics": ["qty", "revenue", "asp"],
             }
-        }
+        },
     )
 
-    start_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-01"])
-    end_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-06"])
-    product_group: str = Field(min_length=1, max_length=50, examples=["Mobile OLED"])
-    customer_id: str | None = Field(default=None, max_length=30)
-    group_by_customer: bool = Field(default=False)
+    start_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    end_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    product_groups: list[ProductGroup] = Field(
+        min_length=1, description="조회할 제품군 목록"
+    )
+    customer_ids: list[CustomerId] | None = Field(
+        min_length=1, description="고객 목록. 필터가 없으면 null"
+    )
+    group_by: list[Literal["month", "customer", "product_group"]] = Field(
+        min_length=1, description="판매 데이터를 묶을 집계 기준"
+    )
+    metrics: list[Literal["qty", "revenue", "asp"]] = Field(
+        min_length=1, description="조회할 지표: 판매량, 매출, ASP"
+    )
+
+    @field_validator("product_groups", "customer_ids", "group_by", "metrics")
+    @classmethod
+    def validate_lists(cls, values):
+        return validate_unique_items(values)
 
     @model_validator(mode="after")
-    def validate_month_range(self) -> "SalesTrendRequest":
-        """판매 조회 시작 월이 종료 월보다 늦지 않은지 검증한다."""
-        if self.start_month > self.end_month:
-            raise ValueError("start_month는 end_month보다 늦을 수 없습니다.")
+    def validate_request(self) -> "SalesTrendRequest":
+        validate_month_range(self.start_month, self.end_month)
         return self
 
 
 class SalesTrendPoint(BaseModel):
-    """판매 동향 차트와 표에 표시할 월별 집계 데이터이다."""
+    """선택한 집계 기준과 지표를 담는 판매 결과 행이다."""
 
-    # 고객별 조회가 아닐 때는 customer_id/customer_name이 비어 있다.
-    # 같은 모델을 쓰면 기존 월별 조회와 고객별 월별 조회를 한 화면에서 처리하기 쉽다.
+    # 집계하지 않은 차원과 선택하지 않은 지표는 None으로 구분한다.
+    month: str | None = None
+    product_group: str | None = None
     customer_id: str | None = None
     customer_name: str | None = None
-    month: str
-    qty: int
-    revenue: float
-    asp: float
+    qty: int | None = None
+    revenue: float | None = None
+    asp: float | None = None
 
 
 class SalesTrendResponse(ToolResponse):
@@ -53,56 +90,59 @@ class SalesTrendResponse(ToolResponse):
 
     data: list[SalesTrendPoint]
     chart_data: dict[str, Any]
+    aggregates: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class OrderStatusRequest(BaseModel):
-    """수주 현황 Tool 요청값이다."""
+    """복수 제품·고객·상태와 고객별·제품별 집계를 받는 수주 요청이다."""
 
     model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
         json_schema_extra={
             "example": {
                 "start_date": "2026-01-01",
                 "end_date": "2026-06-30",
-                "customer_id": None,
-                "product_group": "Mobile OLED",
-                "status": None,
+                "product_groups": ["Mobile OLED"],
+                "customer_ids": None,
+                "statuses": None,
+                "group_by_customer": False,
+                "group_by_product_group": False,
             }
-        }
+        },
     )
 
     start_date: date
     end_date: date
-    customer_id: str | None = Field(default=None, max_length=30)
-    product_group: str = Field(
-        min_length=1, max_length=50, examples=["Mobile OLED"]
+    product_groups: list[ProductGroup] = Field(min_length=1)
+    customer_ids: list[CustomerId] | None = Field(
+        min_length=1, description="고객 필터. 없으면 null"
     )
-    status: str | None = Field(default=None, examples=["CONFIRMED"])
+    statuses: list[OrderState] | None = Field(
+        min_length=1, description="수주 상태 목록. 전체 상태는 null"
+    )
+    group_by_customer: bool = Field(description="고객별 집계 여부")
+    group_by_product_group: bool = Field(description="제품군별 집계 여부")
+
+    @field_validator("product_groups", "customer_ids", "statuses")
+    @classmethod
+    def validate_lists(cls, values):
+        return validate_unique_items(values)
 
     @model_validator(mode="after")
     def validate_request(self) -> "OrderStatusRequest":
-        """수주 조회 기간과 주문 상태 코드가 허용 범위 안에 있는지 검증한다."""
         if self.start_date > self.end_date:
             raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
-        if self.status:
-            self.status = self.status.upper()
-            allowed_statuses = {
-                "REQUESTED",
-                "CONFIRMED",
-                "DELAYED",
-                "SHIPPED",
-                "CANCELLED",
-            }
-            if self.status not in allowed_statuses:
-                raise ValueError(
-                    "status는 REQUESTED, CONFIRMED, DELAYED, "
-                    "SHIPPED, CANCELLED 중 하나여야 합니다."
-                )
         return self
 
 
 class OrderStatusPoint(BaseModel):
     """수주 현황 차트와 표에 표시할 월별 집계 데이터이다."""
 
+    product_group: str | None = None
+    customer_id: str | None = None
+    customer_name: str | None = None
     month: str
     total_orders: int
     total_order_qty: int
@@ -119,37 +159,59 @@ class OrderStatusResponse(ToolResponse):
 
     data: list[OrderStatusPoint]
     chart_data: dict[str, Any]
+    aggregates: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class InventoryRiskRequest(BaseModel):
-    """재고 리스크 Tool 요청값이다."""
+    """시작 월부터 종료 월까지 제품군별 재고를 조회하는 요청이다."""
 
     model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
         json_schema_extra={
             "example": {
-                "inventory_month": "2026-06",
-                "product_group": "TV OLED",
+                "start_month": "2026-04",
+                "end_month": "2026-06",
+                "product_groups": ["TV OLED"],
             }
-        }
+        },
     )
 
-    inventory_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
-    product_group: str = Field(min_length=1, max_length=50)
+    start_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    end_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    product_groups: list[ProductGroup] = Field(min_length=1)
+
+    @field_validator("product_groups")
+    @classmethod
+    def validate_product_groups(cls, values):
+        return validate_unique_items(values)
+
+    @model_validator(mode="after")
+    def validate_request(self) -> "InventoryRiskRequest":
+        validate_month_range(self.start_month, self.end_month)
+        return self
 
 
 class InventoryTrendPoint(BaseModel):
     """재고 리스크 차트와 표에 표시할 월별 재고 데이터이다."""
 
+    product_group: str | None = None
     month: str
     ending_stock: int
     safety_stock: int
     production_qty: int
     sales_qty: int
+    # 미계산 상태를 0으로 표시하지 않는다. 계산은 조회 계층에서 수행한다.
+    shortage_qty: int | None = Field(default=None, ge=0)
+    excess_qty: int | None = Field(default=None, ge=0)
 
 
 class InventoryRiskSignal(BaseModel):
     """재고 Tool이 감지한 개별 리스크 신호이다."""
 
+    product_group: str | None = None
+    month: str | None = None
     level: Literal["HIGH", "MEDIUM", "LOW"]
     type: str
     message: str
@@ -161,6 +223,8 @@ class InventoryRiskResponse(ToolResponse):
     data: list[InventoryTrendPoint]
     risk_signals: list[InventoryRiskSignal]
     chart_data: dict[str, Any]
+    aggregates: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class CustomerProfileRequest(BaseModel):

@@ -100,12 +100,17 @@ def get_sales_trend(
 ) -> SalesTrendResponse | ErrorResponse:
     start_date = _parse_month(request.start_month)
     end_date = _parse_month(request.end_month)
+    product_filter = ""
     customer_filter = ""
+    product_label = request.product_group or "전체 제품군"
     params: dict[str, object] = {
         "start_date": start_date,
         "end_exclusive": _next_month(end_date),
-        "product_group": request.product_group,
     }
+    if request.product_group:
+        product_filter = "and p.product_group = %(product_group)s"
+        params["product_group"] = request.product_group
+
     if request.customer_id:
         customer_filter = "and s.customer_id = %(customer_id)s"
         params["customer_id"] = request.customer_id
@@ -137,7 +142,7 @@ def get_sales_trend(
         join public.dim_customer as c on c.customer_id = s.customer_id
         where s.sales_month >= %(start_date)s
           and s.sales_month < %(end_exclusive)s
-          and p.product_group = %(product_group)s
+          {product_filter}
           {customer_filter}
         group by s.sales_month{customer_group}
         order by s.sales_month{customer_order}
@@ -174,14 +179,14 @@ def get_sales_trend(
     actions: list[str] = []
 
     if not points:
-        summary = f"{request.product_group} 조건에 해당하는 판매 데이터가 없습니다."
+        summary = f"{product_label} 조건에 해당하는 판매 데이터가 없습니다."
         actions.append("조회 기간, 제품군 또는 고객사 조건을 확인하세요.")
     elif request.group_by_customer:
         customer_count = len({point.customer_id for point in points if point.customer_id})
         total_revenue = sum(point.revenue for point in points)
         top_customer = max(points, key=lambda point: point.revenue)
         summary = (
-            f"최근 {months}개월 {request.product_group} 판매 매출을 "
+            f"최근 {months}개월 {product_label} 판매 매출을 "
             f"{customer_count}개 고객 기준으로 월별 집계했습니다."
         )
         insights.append(f"조회 기간 총 매출은 {total_revenue:,.2f}입니다.")
@@ -222,7 +227,7 @@ def get_sales_trend(
         insights.append(asp_insight)
         if asp_change_rate is not None and asp_change_rate <= -5:
             risk_signals.append(f"ASP가 기간 내 {abs(asp_change_rate):.1f}% 하락했습니다.")
-        summary = f"최근 {months}개월 {request.product_group} 판매량은 {direction} 추세입니다."
+        summary = f"최근 {months}개월 {product_label} 판매량은 {direction} 추세입니다."
 
     return SalesTrendResponse(
         tool_name="get_sales_trend",

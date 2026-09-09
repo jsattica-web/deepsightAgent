@@ -157,6 +157,42 @@ class SalesTrendTests(unittest.TestCase):
         self.assertNotIn("database unavailable", result.message)
 
 
+    def test_all_products_customer_grouped_when_product_null_or_omitted(self):
+        for product_options in ({}, {"product_group": None}):
+            with self.subTest(product_options=product_options):
+                request = SalesTrendRequest(
+                    start_month="2026-01", end_month="2026-06",
+                    group_by_customer=True, **product_options,
+                )
+                cursor = FakeCursor([{
+                    "month": "2026-06", "customer_id": "CUST_A",
+                    "customer_name": "Customer A", "total_qty": 100,
+                    "total_revenue": Decimal("6000"), "avg_asp": Decimal("60"),
+                }])
+                with patch("app.tools.sales_tool.get_connection",
+                           return_value=FakeConnection(cursor)):
+                    result = get_sales_trend(request)
+                self.assertIsInstance(result, SalesTrendResponse)
+                self.assertNotIn("%(product_group)s", cursor.query)
+                self.assertNotIn("product_group", cursor.params)
+                self.assertIn("group by s.sales_month, c.customer_id, c.customer_name", cursor.query)
+                self.assertEqual(result.data[0].customer_id, "CUST_A")
+                self.assertIn("전체 제품군", result.summary)
+
+    def test_all_products_retains_customer_filter(self):
+        request = SalesTrendRequest(
+            start_month="2026-01", end_month="2026-06", customer_id="CUST_A",
+        )
+        cursor = FakeCursor([])
+        with patch("app.tools.sales_tool.get_connection",
+                   return_value=FakeConnection(cursor)):
+            result = get_sales_trend(request)
+        self.assertEqual(cursor.params["customer_id"], "CUST_A")
+        self.assertIn("and s.customer_id = %(customer_id)s", cursor.query)
+        self.assertNotIn("%(product_group)s", cursor.query)
+        self.assertIn("전체 제품군", result.summary)
+
+
 if __name__ == "__main__":
     unittest.main()
 

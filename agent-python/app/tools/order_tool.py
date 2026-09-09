@@ -1,4 +1,3 @@
-import json
 import logging
 
 from psycopg2.extras import RealDictCursor
@@ -14,17 +13,47 @@ from app.schemas.tool_schema import (
 logger = logging.getLogger(__name__)
 
 
+def _chart_data(groups: dict, months: list[str]) -> dict:
+    """STATUS 지표 4개 별로 분기하여 각 차트에 표시한다."""
+    series = []
+    for group in groups.values():
+        label = group["label"]
+        confirmed = []
+        pending = []
+        delayed = []
+        cancelled = []
+        for month in months:
+            matched = None
+            for point in group["points"]:
+                if point.month == month:
+                    matched = point
+                    break
+            confirmed.append(matched.confirmed_count if matched else 0)
+            pending.append(matched.pending_count if matched else 0)
+            delayed.append(matched.delayed_count if matched else 0)
+            cancelled.append(matched.cancelled_count if matched else 0)
+        series.append({"name": f"{label} / confirmed", "data": confirmed})
+        series.append({"name": f"{label} / pending", "data": pending})
+        series.append({"name": f"{label} / delayed", "data": delayed})
+        series.append({"name": f"{label} / cancelled", "data": cancelled})
+    return {"type": "bar", "x": months, "series": series}
+
+
 def get_order_status(
     request: OrderStatusRequest,
 ) -> OrderStatusResponse | ErrorResponse:
+    # 1. 값이 있는 조건만 SQL 필터에 추가한다.
+    product_filter = ""
     customer_filter = ""
     status_filter = ""
     params: dict[str, object] = {
         "start_date": request.start_date,
         "end_date": request.end_date,
-        "product_group": request.product_group,
     }
 
+    if request.product_group:
+        product_filter = "and p.product_group = %(product_group)s"
+        params["product_group"] = request.product_group
     if request.customer_id:
         customer_filter = "and o.customer_id = %(customer_id)s"
         params["customer_id"] = request.customer_id
@@ -32,9 +61,24 @@ def get_order_status(
         status_filter = "and o.status = %(status)s"
         params["status"] = request.status
 
+    # 2. 선택한 집계 기준을 SELECT와 GROUP BY에 함께 추가한다.
+    product_select = ""
+    product_group = ""
+    if request.group_by_product_group:
+        product_select = "p.product_group,"
+        product_group = ", p.product_group"
+
+    customer_select = ""
+    customer_group = ""
+    if request.group_by_customer:
+        customer_select = "c.customer_id, c.customer_name,"
+        customer_group = ", c.customer_id, c.customer_name"
+
     query = f"""
         select
             to_char(date_trunc('month', o.order_date), 'YYYY-MM') as month,
+            {product_select}
+            {customer_select}
             count(*)::integer as total_orders,
             coalesce(sum(o.order_qty), 0)::bigint as total_order_qty,
             count(*) filter (where o.status = 'CONFIRMED')::integer
@@ -64,11 +108,11 @@ def get_order_status(
         join public.dim_product as p on p.product_id = o.product_id
         where o.order_date >= %(start_date)s
           and o.order_date <= %(end_date)s
-          and p.product_group = %(product_group)s
+          {product_filter}
           {customer_filter}
           {status_filter}
-        group by date_trunc('month', o.order_date)
-        order by date_trunc('month', o.order_date)
+        group by date_trunc('month', o.order_date){product_group}{customer_group}
+        order by date_trunc('month', o.order_date){product_group}{customer_group}
     """
 
     try:
@@ -87,6 +131,9 @@ def get_order_status(
     points = [
         OrderStatusPoint(
             month=row["month"],
+            product_group=row.get("product_group"),
+            customer_id=row.get("customer_id"),
+            customer_name=row.get("customer_name"),
             total_orders=row["total_orders"],
             total_order_qty=row["total_order_qty"],
             confirmed_count=row["confirmed_count"],
@@ -103,7 +150,7 @@ def get_order_status(
         return OrderStatusResponse(
             tool_name="get_order_status",
             status="success",
-            summary=f"{request.product_group} 조건에 해당하는 수주 데이터가 없습니다.",
+            summary=f"{request.product_group or "전체 제품군"} 조건에 해당하는 수주 데이터가 없습니다.",
             data=[],
             insights=[],
             risk_signals=[],
@@ -111,6 +158,47 @@ def get_order_status(
             actions=["조회 기간, 제품군, 고객사 또는 상태 조건을 확인하세요."],
         )
 
+    # 3. 고객사·제품군별로 나눠 분석한다.
+    groups = {}
+    for point in points:
+        key = (point.customer_id, point.product_group)
+        if key not in groups:
+            label = point.product_group or request.product_group or "전체 제품군"
+            if request.group_by_customer:
+                customer = point.customer_name or point.customer_id or "고객 미지정"
+                label = f"{customer} / {label}"
+            groups[key] = {"label": label, "points": []}
+        groups[key]["points"].append(point)
+
+    summaries = []
+    insights = []
+    risk_signals = []
+    actions = []
+    for group in groups.values():
+        result = _analyze_group(group["points"], group["label"])
+        summaries.append(result["summary"])
+        insights.extend(result["insights"])
+        risk_signals.extend(result["risk_signals"])
+        for action in result["actions"]:
+            if action not in actions:
+                actions.append(action)
+
+    # 4. 분석 결과와 월별 차트를 반환한다.
+    months = sorted({point.month for point in points})
+    return OrderStatusResponse(
+        tool_name="get_order_status",
+        status="success",
+        summary=f"{request.start_date}부터 {request.end_date}까지 " + " ".join(summaries),
+        data=points,
+        insights=insights,
+        risk_signals=risk_signals,
+        chart_data=_chart_data(groups, months),
+        actions=actions,
+    )
+
+
+def _analyze_group(points: list[OrderStatusPoint], label: str) -> dict:
+    """한 고객사·제품군의 수주 현황과 위험을 분석한다."""
     total_orders = sum(point.total_orders for point in points)
     total_order_qty = sum(point.total_order_qty for point in points)
     confirmed_count = sum(point.confirmed_count for point in points)
@@ -119,7 +207,9 @@ def get_order_status(
     cancelled_count = sum(point.cancelled_count for point in points)
     delayed_rate = delayed_count / total_orders * 100
     cancelled_rate = cancelled_count / total_orders * 100
-    combined_risk_rate = (delayed_count + cancelled_count) / total_orders * 100
+    # 지연이면서 취소인 주문을 중복 계산하지 않는다.
+    risk_order_count = sum(point.risk_order_count for point in points)
+    combined_risk_rate = risk_order_count / total_orders * 100
 
     insights = [
         f"전체 수주량은 {total_order_qty:,}개입니다.",
@@ -155,56 +245,9 @@ def get_order_status(
     else:
         actions.append("현재 수주 상태를 지속적으로 모니터링하세요.")
 
-    return OrderStatusResponse(
-        tool_name="get_order_status",
-        status="success",
-        summary=(
-            f"{request.start_date}부터 {request.end_date}까지 "
-            f"{request.product_group} 수주는 총 {total_orders}건, "
-            f"{total_order_qty:,}개입니다."
-        ),
-        data=points,
-        insights=insights,
-        risk_signals=risk_signals,
-        chart_data={
-            "type": "bar",
-            "x": [point.month for point in points],
-            "series": [
-                {
-                    "name": "confirmed",
-                    "data": [point.confirmed_count for point in points],
-                },
-                {
-                    "name": "pending",
-                    "data": [point.pending_count for point in points],
-                },
-                {
-                    "name": "delayed",
-                    "data": [point.delayed_count for point in points],
-                },
-                {
-                    "name": "cancelled",
-                    "data": [point.cancelled_count for point in points],
-                },
-            ],
-        },
-        actions=actions,
-    )
-
-
-# if __name__ == "__main__":
-#     sample_request = OrderStatusRequest(
-#         start_date="2026-01-01",
-#         end_date="2026-06-30",
-#         customer_id=None,
-#         product_group="Mobile OLED",
-#         status=None,
-#     )
-#     sample_response = get_order_status(sample_request)
-#     print(
-#         json.dumps(
-#             sample_response.model_dump(mode="json"),
-#             ensure_ascii=False,
-#             indent=2,
-#         )
-#     )
+    return {
+        "summary": f"{label} 수주는 총 {total_orders}건, {total_order_qty:,}개입니다.",
+        "insights": [f"{label}: {item}" for item in insights],
+        "risk_signals": [f"{label}: {item}" for item in risk_signals],
+        "actions": [f"{label}: {item}" for item in actions],
+    }

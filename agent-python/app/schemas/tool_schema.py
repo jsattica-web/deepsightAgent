@@ -29,7 +29,7 @@ def validate_unique_items(values: list[str] | None) -> list[str] | None:
 
 
 class SalesTrendRequest(BaseModel):
-    """구조화된 판매 조회 조건이다. 단수형 필드는 사용하지 않는다."""
+    """제품군과 고객 조건으로 월별 판매 실적을 조회한다."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -38,33 +38,20 @@ class SalesTrendRequest(BaseModel):
             "example": {
                 "start_month": "2026-01",
                 "end_month": "2026-06",
-                "product_groups": ["Mobile OLED"],
-                "customer_ids": None,
-                "group_by": ["month"],
-                "metrics": ["qty", "revenue", "asp"],
+                "product_group": "Mobile OLED",
+                "customer_id": None,
+                "group_by_customer": False,
             }
         },
     )
 
     start_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
     end_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
-    product_groups: list[ProductGroup] = Field(
-        min_length=1, description="조회할 제품군 목록"
+    product_group: ProductGroup | None = Field(
+        default=None, description="제품군 조건이 없으면 null. ALL은 사용하지 않는다."
     )
-    customer_ids: list[CustomerId] | None = Field(
-        min_length=1, description="고객 목록. 필터가 없으면 null"
-    )
-    group_by: list[Literal["month", "customer", "product_group"]] = Field(
-        min_length=1, description="판매 데이터를 묶을 집계 기준"
-    )
-    metrics: list[Literal["qty", "revenue", "asp"]] = Field(
-        min_length=1, description="조회할 지표: 판매량, 매출, ASP"
-    )
-
-    @field_validator("product_groups", "customer_ids", "group_by", "metrics")
-    @classmethod
-    def validate_lists(cls, values):
-        return validate_unique_items(values)
+    customer_id: CustomerId | None = None
+    group_by_customer: bool = False
 
     @model_validator(mode="after")
     def validate_request(self) -> "SalesTrendRequest":
@@ -95,7 +82,7 @@ class SalesTrendResponse(ToolResponse):
 
 
 class OrderStatusRequest(BaseModel):
-    """복수 제품·고객·상태와 고객별·제품별 집계를 받는 수주 요청이다."""
+    """제품군·고객·상태 조건과 고객별·제품군별 집계를 받는 수주 요청이다."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -104,31 +91,31 @@ class OrderStatusRequest(BaseModel):
             "example": {
                 "start_date": "2026-01-01",
                 "end_date": "2026-06-30",
-                "product_groups": ["Mobile OLED"],
-                "customer_ids": None,
-                "statuses": None,
+                "product_group": "Mobile OLED",
+                "customer_id": None,
+                "status": None,
                 "group_by_customer": False,
-                "group_by_product_group": False,
+                "group_by_product_group": True,
             }
         },
     )
 
     start_date: date
     end_date: date
-    product_groups: list[ProductGroup] = Field(min_length=1)
-    customer_ids: list[CustomerId] | None = Field(
-        min_length=1, description="고객 필터. 없으면 null"
+    product_group: ProductGroup | None = Field(
+        default=None, description="제품군 조건이 없으면 null. ALL은 사용하지 않는다."
     )
-    statuses: list[OrderState] | None = Field(
-        min_length=1, description="수주 상태 목록. 전체 상태는 null"
-    )
-    group_by_customer: bool = Field(description="고객별 집계 여부")
-    group_by_product_group: bool = Field(description="제품군별 집계 여부")
+    customer_id: CustomerId | None = None
+    status: OrderState | None = None
+    group_by_customer: bool = False
+    group_by_product_group: bool = True
 
-    @field_validator("product_groups", "customer_ids", "statuses")
+    @field_validator("status", mode="before")
     @classmethod
-    def validate_lists(cls, values):
-        return validate_unique_items(values)
+    def normalize_status(cls, value):
+        if isinstance(value, str):
+            return value.strip().upper()
+        return value
 
     @model_validator(mode="after")
     def validate_request(self) -> "OrderStatusRequest":
@@ -173,19 +160,24 @@ class InventoryRiskRequest(BaseModel):
             "example": {
                 "start_month": "2026-04",
                 "end_month": "2026-06",
-                "product_groups": ["TV OLED"],
+                "product_group": "TV OLED",
+                "customer_id": None,
+                "group_by_customer": False,
             }
         },
     )
 
     start_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
     end_month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
-    product_groups: list[ProductGroup] = Field(min_length=1)
+    product_group: ProductGroup | None = Field(
+        default=None,
+        min_length=1,
+        description="제품군 조건이 없으면 null. ALL은 사용하지 않는다.",
+    )
 
-    @field_validator("product_groups")
-    @classmethod
-    def validate_product_groups(cls, values):
-        return validate_unique_items(values)
+    customer_id: CustomerId | None = None
+    group_by_customer: bool = False
+    group_by_product_group: bool = True
 
     @model_validator(mode="after")
     def validate_request(self) -> "InventoryRiskRequest":
@@ -196,6 +188,8 @@ class InventoryRiskRequest(BaseModel):
 class InventoryTrendPoint(BaseModel):
     """재고 리스크 차트와 표에 표시할 월별 재고 데이터이다."""
 
+    customer_id: str | None = None
+    customer_name: str | None = None
     product_group: str | None = None
     month: str
     ending_stock: int
@@ -210,6 +204,8 @@ class InventoryTrendPoint(BaseModel):
 class InventoryRiskSignal(BaseModel):
     """재고 Tool이 감지한 개별 리스크 신호이다."""
 
+    customer_id: str | None = None
+    customer_name: str | None = None
     product_group: str | None = None
     month: str | None = None
     level: Literal["HIGH", "MEDIUM", "LOW"]

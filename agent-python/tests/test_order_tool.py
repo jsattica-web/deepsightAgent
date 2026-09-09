@@ -122,6 +122,59 @@ class OrderStatusTests(unittest.TestCase):
         self.assertEqual(result.status, "error")
         self.assertNotIn("database unavailable", result.message)
 
+    def test_optional_filters_and_grouping_combinations(self):
+        for customer_grouped in (False, True):
+            for product_grouped in (False, True):
+                with self.subTest(customer=customer_grouped, product=product_grouped):
+                    request = OrderStatusRequest(
+                        start_date="2026-01-01", end_date="2026-06-30",
+                        group_by_customer=customer_grouped,
+                        group_by_product_group=product_grouped,
+                    )
+                    cursor = FakeCursor([])
+                    with patch("app.tools.order_tool.get_connection",
+                               return_value=FakeConnection(cursor)):
+                        result = get_order_status(request)
+                    self.assertEqual(result.status, "success")
+                    for field in ("product_group", "customer_id", "status"):
+                        self.assertNotIn(field, cursor.params)
+                        self.assertNotIn("%(" + field + ")s", cursor.query)
+                    group_sql = cursor.query.split("group by")[1].split("order by")[0]
+                    self.assertEqual("c.customer_id" in group_sql, customer_grouped)
+                    self.assertEqual("p.product_group" in group_sql, product_grouped)
+
+    def test_customer_product_results_and_risks_stay_separate(self):
+        rows = []
+        for month, customer, product, delayed in [
+            ("2026-01", "CUST_A", "TV OLED", 3),
+            ("2026-02", "CUST_B", "TV OLED", 0),
+            ("2026-02", "CUST_A", "IT OLED", 0),
+        ]:
+            rows.append(dict(month=month, customer_id=customer, customer_name=customer,
+                product_group=product, total_orders=10, total_order_qty=100,
+                confirmed_count=10-delayed, pending_count=0, delayed_count=delayed,
+                cancelled_count=0, shipped_count=0, risk_order_count=delayed))
+        cursor = FakeCursor(rows)
+        request = OrderStatusRequest(start_date="2026-01-01", end_date="2026-06-30",
+            product_group=None, customer_id=None, status=None,
+            group_by_customer=True, group_by_product_group=True)
+        with patch("app.tools.order_tool.get_connection", return_value=FakeConnection(cursor)):
+            result = get_order_status(request)
+        self.assertEqual(len(result.data), 3)
+        self.assertEqual(result.chart_data["x"], ["2026-01", "2026-02"])
+        self.assertEqual(len(result.chart_data["series"]), 12)
+        delayed_series = result.chart_data["series"][2]
+        self.assertEqual(delayed_series["data"], [3, 0])
+        self.assertIn("CUST_A / TV OLED", delayed_series["name"])
+        self.assertTrue(result.risk_signals)
+        self.assertTrue(all("CUST_A / TV OLED" in item for item in result.risk_signals))
+
+    def test_invalid_filters_are_rejected(self):
+        from pydantic import ValidationError
+        for invalid in ({"product_group": []}, {"customer_id": " "}, {"status": "INVALID"}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                OrderStatusRequest(start_date="2026-01-01", end_date="2026-06-30", **invalid)
+
 
 if __name__ == "__main__":
     unittest.main()

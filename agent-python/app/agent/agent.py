@@ -101,23 +101,25 @@ def tool_error(
 def sales_trend_tool(
         start_month: str,
         end_month: str,
-        product_groups: list[str],
-        customer_ids: list[str] | None = None,
-        group_by: list[str] = ["month"],
-        metrics: list[str] = ["qty", "revenue", "asp"],
+        product_group: str | None = None,
+        customer_id: str | None = None,
+        group_by_customer: bool = False,
     ) -> dict[str, Any]:
-    """판매량, 매출, ASP 및 판매 추이를 조회한다.
+    """판매 실적의 기준 데이터를 조회한다.
 
-    고객별 판매는 group_by에 customer를 포함한다.
+    판매량, 매출, ASP와 월별 판매 추이를 분석할 때 사용한다.
+    다른 영역의 지표와 판매 실적을 비교할 때도 이 도구로 판매 데이터를 확인한다.
+    고객별 판매는 group_by_customer=true로 조회한다.
+    제품군을 지정하지 않으면 product_group=null로 호출한다. ALL은 사용하지 않는다.
+    특정 제품군 여러 개를 비교하면 제품군마다 따로 호출한다.
     고객 등급이나 지역 정보는 customer_profile_tool을 사용한다.
     """
     request = SalesTrendRequest(
         start_month=start_month,
         end_month=end_month,
-        product_groups=product_groups,
-        customer_ids=customer_ids,
-        group_by=group_by,
-        metrics=metrics,
+        product_group=product_group,
+        customer_id=customer_id,
+        group_by_customer=group_by_customer,
     )
     try:
         result = get_sales_trend(request)
@@ -145,24 +147,25 @@ def sales_trend_tool(
 def order_status_tool(
     start_date: date,
     end_date: date,
-    product_groups: list[str],
-    customer_ids: list[str] | None,
-    statuses: list[str] | None,
-    group_by_customer: bool,
-    group_by_product_group: bool,
+    product_group: str | None = None,
+    customer_id: str | None = None,
+    status: str | None = None,
+    group_by_customer: bool = False,
+    group_by_product_group: bool = True,
 ) -> dict[str, Any]:
     """수주량, 주문 상태, 지연 및 출하 현황을 조회한다.
 
-    statuses가 null이면 전체 상태를 조회한다.
+    product_group, customer_id, status는 지정하지 않으면 null로 전달한다.
+    null인 조건은 필터 없이 전체 조회하며 ALL은 사용하지 않는다.
     고객별 또는 제품별 비교에는 해당 집계 옵션을 사용한다.
     """
 
     request = OrderStatusRequest(
         start_date=start_date,
         end_date=end_date,
-        product_groups=product_groups,
-        customer_ids=customer_ids,
-        statuses=statuses,
+        product_group=product_group,
+        customer_id=customer_id,
+        status=status,
         group_by_customer=group_by_customer,
         group_by_product_group=group_by_product_group,
     )
@@ -193,18 +196,30 @@ def order_status_tool(
 def inventory_risk_tool(
     start_month: str,
     end_month: str,
-    product_groups: list[str],
+    product_group: str | None = None,
+    customer_id: str | None = None,
+    group_by_customer: bool = False,
+    group_by_product_group: bool = True,
 ) -> dict[str, Any]:
-    """기간별 제품 재고, 안전재고, 과잉 및 부족을 조회한다.
+    """재고, 안전재고, 생산량과 재고 과잉·부족을 조회한다.
 
-    고객별 재고 데이터는 제공하지 않는다.
+    sales_qty는 재고 테이블에 기록된 판매·출하 수량이다.
+    재고 계산을 위한 보조 지표이며 판매 실적 조회를 대체하지 않는다.
+
+    제품군을 지정하지 않으면 product_group=null로 호출한다.
+    ALL은 사용하지 않는다.
+    customer_id로 고객사를 필터링한다.
+    group_by_customer와 group_by_product_group으로 고객별, 제품군별 집계를 선택한다.
     판매나 수주와 비교할 때 같은 조회 기간을 사용한다.
     """
 
     request = InventoryRiskRequest(
         start_month=start_month,
         end_month=end_month,
-        product_groups=product_groups,
+        product_group=product_group,
+        customer_id=customer_id,
+        group_by_customer=group_by_customer,
+        group_by_product_group=group_by_product_group,
     )
 
     try:
@@ -393,7 +408,15 @@ def build_agent():
             "You are a Display Market Intelligence Agent. "
             "사용자에게 한국어로 답변한다. "
             "질문에 필요한 데이터 Tool을 선택하고 실제로 실행한다. "
-            "복합 질문에는 필요한 Tool을 여러 개 사용한다. "
+            "질문에 답하는 데 필요한 지표를 먼저 파악한다. "
+            "각 지표는 해당 지표를 담당하는 Tool에서 조회한다. "
+            "한 Tool에 보조 지표가 있어도 다른 영역의 기준 데이터를 "
+            "확보한 것으로 간주하지 않는다. "
+            "비교할 데이터는 기간, 제품군, 고객 범위와 집계 단위를 맞춘다. "
+            "답변 전에 필요한 지표의 조회 결과가 모두 확보됐는지 확인한다. "
+            "누락된 지표가 있으면 해당 Tool을 추가 호출한다. "
+            "조회에 실패했거나 데이터가 없으면 그 한계를 명시한다. "
+            "두 지표가 함께 변했다는 사실만으로 인과관계를 단정하지 않는다. "
             "질문에 명시된 기간, 제품, 고객 조건을 적용한다. "
             "기간이나 고객이 불명확하면 임의로 정하지 말고 추가 질문한다. "
             "특정 고객이 지정되지 않으면 고객 필터는 null로 전달한다. "
